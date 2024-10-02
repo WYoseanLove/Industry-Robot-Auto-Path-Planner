@@ -14,6 +14,8 @@ using System.Threading.Tasks;
 using Tecnomatix.Engineering;
 using Tecnomatix.Engineering.Ui;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
+using System.Xml.Linq;
+using Tecnomatix.Engineering.PrivateImplementationDetails;
 
 
 
@@ -131,7 +133,7 @@ namespace rrtRobot
              * 将机器人，和焊钳添加到碰撞检测的target中去，Src的定义需要用户来实现
              */
 
-            robot = m_txRobotName.Object as TxRobot;
+           robot = m_txRobotName.Object as TxRobot;
             if (robot != null)
             {
 
@@ -159,10 +161,8 @@ namespace rrtRobot
                 TxMessageBox.Show("No Weld Gun Added in Picked Robot Tool Box !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            
             tSelectObject = robot.MountedTools[0] as ITxDevice;
-
-            if (robot.MountedTools.Count>1)
+            if (robot.MountedTools.Count > 1)
             {
                 for (int i = 0; i < robot.MountedTools.Count; i++)
                 {
@@ -173,18 +173,26 @@ namespace rrtRobot
                 TxMessageBox.Show("Weld Gun not set as the first Mounted Tools, please re-mount the Gun !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
 
-            }
-            TxObjectList x = tSelectObject.PoseList;
 
+            }
+
+            TxObjectList x = tSelectObject.PoseList;
             try
             {
 
                 for (int i = 0; i < x.Count; i++)
                 {
 
-                    toolJointValues = ((TxPose)x[i]).PoseData.JointValues;
-                    if (Math.Abs(Convert.ToInt16(toolJointValues[0]) - 0) > 10)
+                    string poseName = ((TxPose)x[i]).Name;
+                    poseName = poseName.ToLower();
+                    if (poseName == "open")
+                    {
+                        toolJointValues = ((TxPose)x[i]).PoseData.JointValues;
                         break;
+                    }
+                    else
+                        continue;
+
                 }
                 ToolJointOpening = (double)Convert.ToInt16(toolJointValues[0]);
 
@@ -195,7 +203,7 @@ namespace rrtRobot
                         robot.UnmountTool(robot.MountedTools[i] as ITxLocatableObject);
                         i--;
                     }
-                    TxMessageBox.Show("Weld Gun not set as System Requested Mounted Tools, please re-mount the Gun !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    TxMessageBox.Show("Not Get the Gun Openning Data, please re-check the Gun !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
 
                 }
@@ -364,10 +372,11 @@ namespace rrtRobot
             queryParams.Mode = TxCollisionQueryParams.TxCollisionQueryMode.DefinedPairs;
 
             queryParams.NearMissDistance = Clearance;
-
+ 
             TxCollisionQueryResults results = root.GetCollidingObjects(queryParams);
             if (results.States.Count == 0)
             {
+               
                 cd.Dispose();
 
                 return true;
@@ -384,9 +393,7 @@ namespace rrtRobot
                 }
             }
 
-           
-            
-           
+
             cd.Dispose();
            
             return true;
@@ -410,102 +417,25 @@ namespace rrtRobot
                robot.AbsoluteLocation.RotationRPY_XYZ.X,
                robot.AbsoluteLocation.RotationRPY_XYZ.Y,
                robot.AbsoluteLocation.RotationRPY_XYZ.Z, p.Gun_Open), spotagainstCollisionSrc);
-            int n = 1;
             point temP = p;
-            double distance = TxRobotRRTConnect.dist(p, new point(robot.AbsoluteLocation.Translation.X,
-                robot.AbsoluteLocation.Translation.Y,
-               robot.AbsoluteLocation.Translation.Z,
-
-               0, 0, 0,0));
-
-
             double stepsize = 50;
             // 首先沿着计算出的轴移动50mm，确定stepsize 的方向，移动的方向需要距离机器人更近
-            List<double> stepMoves = new List<double>();
-            List<double> tempmoves= new List<double>();
-            double newdistance = 0;
-             
-            if (distoAix.Min() == distoAix[0])//说明需要按照X轴来进行移动，进一步确定移动的方向；
-            {
-
-                stepMoves.Add(stepsize);
-                stepMoves.Add(0);
-                stepMoves.Add(0);
-
-                tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
-
-                newdistance = TxRobotRRTConnect.dist(new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz,0), new point(robot.AbsoluteLocation.Translation.X,
-                robot.AbsoluteLocation.Translation.Y,
-                robot.AbsoluteLocation.Translation.Z,
-                0, 0, 0,0));
-
-                if (newdistance > distance)
-                {
-                    stepsize = -stepsize;
-                    stepMoves[0] = stepsize;
-                }
-
-            }
-            else if (distoAix.Min() == distoAix[1])//说明需要按照Y轴来进行移动，进一步确定移动的方向；
-            {
-                stepMoves.Add(0);
-                stepMoves.Add(stepsize);
-                stepMoves.Add(0);
-
-                tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
-
-                newdistance = TxRobotRRTConnect.dist(new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz,0), new point(robot.AbsoluteLocation.Translation.X,
-                robot.AbsoluteLocation.Translation.Y,
-                robot.AbsoluteLocation.Translation.Z,
-                0, 0, 0,0));
-
-                if (newdistance > distance)
-                {
-                    stepsize = -stepsize;
-                    stepMoves[1] = stepsize;
-                }
-
-            }
-            else
-            {
-                stepMoves.Add(0);
-                stepMoves.Add(0);
-                stepMoves.Add(stepsize);
-
-                tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
-
-                newdistance = TxRobotRRTConnect.dist(new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz,0), new point(robot.AbsoluteLocation.Translation.X,
-                    robot.AbsoluteLocation.Translation.Y,
-                    robot.AbsoluteLocation.Translation.Z,
-                    0, 0, 0,0));
-
-                if (newdistance > distance)
-                {
-                    stepsize = -stepsize;
-                    stepMoves[2] = stepsize;
-                }
-
-            }
+            List<double> stepMoves = new List<double>() { 0,0,0};
+            stepMoves = confirmStepMovesDirection(stepMoves, distoAix, stepsize, p);
             while (true)
             {
-                if (TxRobotRRTConnect.collisioncheckforSinglePoint(temP)) break;
-               
-                tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
-                temP = new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz,ToolJointOpening);
-                if (distoAix.Min() == distoAix[0])
-                {
-                    stepMoves[0] += 50 * (stepMoves[0] / (Math.Abs(stepMoves[0])));
-                }
-                else if (distoAix.Min() == distoAix[1])
-                {
-                    stepMoves[1] += 50 * (stepMoves[1] / (Math.Abs(stepMoves[1])));
-                }
-                else
-                    stepMoves[2] += 50 * (stepMoves[2]/ (Math.Abs(stepMoves[2])));
+                if (spotAgainstCollisionMotion(stepMoves,  distoAix,  stepsize, p, out temP))
+                    break;
 
-                n++;
-                if (n > 20) return false;
-                Thread.Sleep(50);
+
+                int minIndex = distoAix.IndexOf(distoAix.Min());
+
+                distoAix[minIndex] =Double.MaxValue;
+                minIndex = distoAix.IndexOf(distoAix.Min());
+                if (distoAix[minIndex] == Double.MaxValue)
+                    return false;
+                stepMoves = new List<double>() { 0, 0, 0 };
+                stepMoves = confirmStepMovesDirection(stepMoves, distoAix, stepsize, p);
 
             }
 
@@ -515,6 +445,64 @@ namespace rrtRobot
             return true;
         }
         
+        private List<double> confirmStepMovesDirection(List<double> stepMoves, List<double> distoAix,double stepsize, point p)
+        {
+            List<double> tempmoves = new List<double>();
+            double newdistance = 0;
+            point temP = p;
+            double distance = TxRobotRRTConnect.dist(p, new point(robot.AbsoluteLocation.Translation.X,
+              robot.AbsoluteLocation.Translation.Y,
+             robot.AbsoluteLocation.Translation.Z,
+             0, 0, 0, 0));
+
+            int minIndex = distoAix.IndexOf(distoAix.Min());
+            if(minIndex>2)
+            {
+                return stepMoves;
+            }
+
+            stepMoves[minIndex] = stepsize;
+
+            tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
+
+            newdistance = TxRobotRRTConnect.dist(new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz, 0), new point(robot.AbsoluteLocation.Translation.X,
+            robot.AbsoluteLocation.Translation.Y,
+            robot.AbsoluteLocation.Translation.Z,
+            0, 0, 0, 0));
+
+            if (newdistance > distance)
+            {
+                stepsize = -stepsize;
+                stepMoves[minIndex] = stepsize;
+            }
+
+            return stepMoves;
+        }
+
+        private bool spotAgainstCollisionMotion(List<double> stepMoves, List<double> distoAix, double stepsize, point p,out point temP)
+        {
+
+            List<double> tempmoves = new List<double>();
+            temP = p;
+            int n = 1;
+            while (true)
+            {
+                if (TxRobotRRTConnect.collisioncheckforSinglePoint(temP)) break;
+
+                tempmoves = TxRobotRRTConnect.getVectorfromTranslate(temP, stepMoves);
+                temP = new point(tempmoves[0], tempmoves[1], tempmoves[2], p.rx, p.ry, p.rz, ToolJointOpening);
+                int minIndex = distoAix.IndexOf(distoAix.Min());
+                stepMoves[minIndex] += stepsize * (stepMoves[minIndex] / (Math.Abs(stepMoves[minIndex])));
+                n++;
+                if (n > 20) return false;
+                Thread.Sleep(50);
+
+            }
+
+            return true;
+
+
+        }
         private void m_pathGenerate_Click(object sender, EventArgs e)
         {
             /* RRT CONNECT计算结束，生辰轨迹点；
@@ -559,7 +547,19 @@ namespace rrtRobot
 
             }
 
-           
+
+            //确认每个焊点是否都进行了进行robot teach 
+            for (int i = 0; i < allWeldPointsExist.Count; i++)
+            {
+                if ((allWeldPointsExist[i] as TxWeldLocationOperation).RobotConfigurationData == null)
+                {
+                    TxMessageBox.Show("please Teach the weld spot target point as reference for Robot ConfigurationData !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+
+            }
+
             int pathindex = 0;
             for (int i = 0; i < allWeldPointsExist.Count; i++)
             {
@@ -569,9 +569,9 @@ namespace rrtRobot
 
                 for (int j = 0; j < fullpath[pathindex].Count; j++)
                 {
-
-                   TxRoboticViaLocationOperation RobFramepostLocation = addrobotPathViaLoc("LocTemp" + allWeldPointsExist[i].Name + j.ToString(), new point(fullpath[pathindex][j].x, fullpath[pathindex][j].y, fullpath[pathindex][j].z,
-                        fullpath[pathindex][j].rx, fullpath[pathindex][j].ry, fullpath[pathindex][j].rz, fullpath[pathindex][j].Gun_Open), weldTargetOperation);
+                  
+                    TxRoboticViaLocationOperation RobFramepostLocation = TxRobotPathOptimize.addrobotPathViaLoc("LocTemp" + allWeldPointsExist[i].Name + j.ToString(), new point(fullpath[pathindex][j].x, fullpath[pathindex][j].y, fullpath[pathindex][j].z,
+                        fullpath[pathindex][j].rx, fullpath[pathindex][j].ry, fullpath[pathindex][j].rz, fullpath[pathindex][j].Gun_Open), weldTargetOperation,robot);
                    
                     weldTargetOperation.MoveChildAfter((TxWeldLocationOperation)allWeldPointsExist[i + 1], RobFramepostLocation);
                     
@@ -581,38 +581,37 @@ namespace rrtRobot
 
                 pathindex++;
             }
+
+            bool optimizedDone= TxRobotPathOptimize.OperationOptimize2(ref weldTargetOperation,robot);
+            if(optimizedDone)
+            {
+                cp.Delete();
+                TxApplication.ActiveSelection.Clear();
+            }
+            else
+            {
+
+                opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
+
+                TxObjectList _robotOpLocation = weldTargetOperation.GetAllDescendants(opFilter);
+
+                for (int i=0;i< _robotOpLocation.Count;i++)
+                {
+
+                    if (_robotOpLocation[i].GetType() == typeof(TxWeldLocationOperation)) continue;
+                    else
+                    {
+                        _robotOpLocation[i].Delete();
+                        _robotOpLocation.RemoveAt(i);
+                    }
+                   
+                }
+
+            }
            
-            
-            cp.Delete();
-            TxApplication.ActiveSelection.Clear();
-            
+
         }
-             
-        private TxRoboticViaLocationOperation addrobotPathViaLoc(string name,point p, TxWeldOperation weldOperation)
-        {
-            TxRoboticViaLocationOperationCreationData roboticViaLocationOperationCreationData = new TxRoboticViaLocationOperationCreationData(name, "", 2.0);
-            TxVector tran = new TxVector(p.x,p.y,p.z);
-
-            TxVector rot = new TxVector(p.rx,p.ry,p.rz);
-
-            roboticViaLocationOperationCreationData.AbsoluteLocation = new TxTransformation(tran, rot, TxTransformation.TxRotationType.RPY_XYZ);
-            
-            TxRoboticViaLocationOperation RobFramepostLocation = weldOperation.CreateRoboticViaLocationOperation(roboticViaLocationOperationCreationData);
-            TxRobotExternalAxisData[] externalAxisData = new TxRobotExternalAxisData[1];
-            externalAxisData[0] = new TxRobotExternalAxisData();
-            externalAxisData[0].Device = robot.MountedTools[0] as TxServoGun;
-            externalAxisData[0].Joint = (robot.MountedTools[0] as TxServoGun).Joints.Last();
-            externalAxisData[0].JointValue = p.Gun_Open;
-
-            RobFramepostLocation.RobotExternalAxesData = externalAxisData;
-
-            RobFramepostLocation.SetParameter(new TxRoboticIntParam("RRS_MOTION_TYPE", 2));
-
-            
-
-            return RobFramepostLocation;
-        }
-      
+        
         private async void button1_Click(object sender, EventArgs e)
         {
             //创建碰撞干涉的检查类组：
