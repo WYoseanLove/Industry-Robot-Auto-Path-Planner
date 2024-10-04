@@ -61,6 +61,7 @@
       <DependentUpon>StringTable.resx</DependentUpon>
     </Compile>
     <Compile Include="TXRobotKinematix.cs" />
+    <Compile Include="TxRobotPathOptimize.cs" />
     <Compile Include="TxRobotRRTConnect.cs" />
     <Compile Include="TxrrtRobotPathPlanner.cs" />
     <Compile Include="TxrrtRobotPathPlannerForm.cs">
