@@ -160,7 +160,71 @@ namespace rrtRobot
          * 2. Inverse Kinematic Solutions: List<double> current_Solution contains all calculated inverse kinematic solutions.
          * 3. Robot: robot specifies the robot used for calculating and defining the inverse kinematic poses.
          */
-       
+        public static int ChooseBestInverseSolution(ref ArrayList current_Solution, TxPoseData pre_txPoseData)
+        { // 周期常量：度单位下是 360；如果是弧度请改为 2*Math.PI
+            const double cycle = 2 * Math.PI;
+            double minDifference = double.MaxValue; int bestSolution = -1;
+
+            // 1) 读出上一次解的角度
+            List<double> preSolution = new List<double>();
+
+            for (int j = 0; j < 6; j++)
+                preSolution.Add((double)pre_txPoseData.JointValues[j]);
+
+
+            // 2) 遍历所有逆解候选
+            for (int i = 0; i < current_Solution.Count; i++)
+            {
+                TxPoseData new_Solution = new TxPoseData();
+                ArrayList newPosedata = new ArrayList();
+                var pose = (TxPoseData)current_Solution[i];
+                List<double> varSolution = new List<double>();
+
+                for (int j = 0; j < 6; j++)
+                    varSolution.Add((double)pose.JointValues[j]);
+                // 对第 3、5 轴做模周期调整
+                double temp = AdjustAngle(varSolution[3], preSolution[3], cycle);
+                if ((temp >= TxrrtRobotPathPlannerForm.robot.Joints[3].LowerSoftLimit) && (temp <= TxrrtRobotPathPlannerForm.robot.Joints[3].UpperSoftLimit))
+                {
+                    varSolution[3] = temp;
+                }
+                //varSolution[3] = AdjustAngle(varSolution[3], preSolution[3], cycle);
+                temp = AdjustAngle(varSolution[5], preSolution[5], cycle);
+                if ((temp >= TxrrtRobotPathPlannerForm.robot.Joints[5].LowerSoftLimit) && (temp <= TxrrtRobotPathPlannerForm.robot.Joints[5].UpperSoftLimit))
+                {
+                    varSolution[5] = temp;
+                }
+
+                for (int j = 0; j < varSolution.Count; j++)
+                {
+                    newPosedata.Add(varSolution[j]);
+                }
+
+                // 3) 计算总差异并更新最优解索引
+                double diff = CalculateTotalDifference(varSolution, preSolution);
+                if (diff < minDifference)
+                {
+                    minDifference = diff;
+                    bestSolution = i;
+                }
+                new_Solution.JointValues = newPosedata;
+                current_Solution[i] = new_Solution;
+            }
+
+            return bestSolution;
+        }
+        /// <summary>
+        /// 把 angle 通过 ±cycle 的整数倍平移到最接近 target 的区域，
+        /// 即让 (angle - target) 落在 [-cycle/2, +cycle/2] 区间内。
+        /// </summary>
+        private static double AdjustAngle(double angle, double target, double cycle)
+        {
+            // 计算最优的整数倍 n
+            double n = Math.Round((target - angle) / cycle);
+            // 返回调整后的角度
+            return angle + n * cycle;
+        }
+
         public static ArrayList filterRobot3rdConfigSolution(TxRobotConfigurationData pre_locationConfigData, ArrayList current_Solution, TxRobot robot)
         {
             ArrayList filter_Solutions = new ArrayList();
@@ -209,11 +273,25 @@ namespace rrtRobot
         }
         public static bool OperationOptimize(ref TxWeldOperation _robweldOperation, TxRobot robot)
         {
+
             TxTypeFilter opFilter = new TxTypeFilter();
             opFilter.AddIncludedType(typeof(TxWeldLocationOperation));
-            //opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
+            opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
             TxObjectList _robotWeldOpLocation = _robweldOperation.GetAllDescendants(opFilter);
+            int targetSeq = 0;
+            for (int i = 0; i < _robotWeldOpLocation.Count; i++)
+            {
+
+                if (_robotWeldOpLocation[i].Name != (TxrrtRobotPathPlannerForm.TargetCalLocNames)[targetSeq])
+                {
+                    _robotWeldOpLocation.RemoveAt(i);
+                    i--;
+                }
+                else
+                    targetSeq++;
+            }
             //筛选出轨迹路径中的焊点和过渡点位
+
             TxTypeFilter opFilterpass = new TxTypeFilter();
             opFilterpass.AddIncludedType(typeof(TxRoboticViaLocationOperation));
             TxObjectList _robotviaOpLocation = _robweldOperation.GetAllDescendants(opFilterpass);
@@ -234,14 +312,14 @@ namespace rrtRobot
                 int _endIndex = FindIndex(_robotOpLocation, _robotWeldOpLocation[i + 1].Name);
                 _startIndex += 1; //紧邻第一个焊点的过渡点在轨迹中的位置；
                 _endIndex -= 1;//紧邻第二个焊点的过渡点在轨迹中的位置；
-                     
+
                 for (int j = _startIndex + 1; j < _endIndex; j++) // j从前往后，k是从后往前
                 {
 
                     for (int k = _endIndex - 1; k > j; k--)
                     {
-                        TxPoseData targetPoseDatastart=new TxPoseData();
-                        TxPoseData targetPoseDataend =new TxPoseData();
+                        TxPoseData targetPoseDatastart = new TxPoseData();
+                        TxPoseData targetPoseDataend = new TxPoseData();
                         try
                         {
                             targetPoseDatastart = robot.GetPoseAtLocation((_robotOpLocation[j] as TxRoboticViaLocationOperation));
@@ -260,11 +338,11 @@ namespace rrtRobot
                         catch (Exception)
                         {
 
-                            TxRobotRRTConnectJoint.logpathGenerateOK(_robotOpLocation[k].Name+" posture get failed");
+                            TxRobotRRTConnectJoint.logpathGenerateOK(_robotOpLocation[k].Name + " posture get failed");
                             continue;
-                            
+
                         }
-                        
+
 
                         joint start = new joint(
 
@@ -288,25 +366,49 @@ namespace rrtRobot
                            (_robotOpLocation[k] as TxRoboticViaLocationOperation).RobotExternalAxesData[0].JointValue
                            );
 
-                      
-                        if (TxRobotRRTConnectJoint.isValidforstepCorss(TxrrtRobotPathPlannerForm.mainTxControl, start, end))
+                        if (TxrrtRobotPathPlannerForm.isRCSLoaded)
                         {
-
-                            while (j != k - 1)
+                            if (TxRobotRRTConnectJoint.isValidforstepCorssRCS(TxrrtRobotPathPlannerForm.mainTxControl, start, end))
                             {
-                                //将j后面的过渡点删掉，由于删除了过渡点，则_endIndex 和k值也需要相应的减少index;
-                                _robotOpLocation[j + 1].Delete();
-                                _robotOpLocation.RemoveAt(j + 1);
-                                k--;
-                                _endIndex--;
 
+                                while (j != k - 1)
+                                {
+                                    //将j后面的过渡点删掉，由于删除了过渡点，则_endIndex 和k值也需要相应的减少index;
+                                    _robotOpLocation[j + 1].Delete();
+                                    _robotOpLocation.RemoveAt(j + 1);
+                                    k--;
+                                    _endIndex--;
+
+                                }
+                                // j 移动到删除点之后的，再次寻找是否可以找到删除的点;
+                                j = k + 1;
+                                break;
                             }
-                            // j 移动到删除点之后的，再次寻找是否可以找到删除的点;
-                            j = k + 1;
-                            break;
+                            else
+                                continue;
                         }
                         else
-                            continue;
+                        {
+                            if (TxRobotRRTConnectJoint.isValidforstepCorss(TxrrtRobotPathPlannerForm.mainTxControl, start, end))
+                            {
+
+                                while (j != k - 1)
+                                {
+                                    //将j后面的过渡点删掉，由于删除了过渡点，则_endIndex 和k值也需要相应的减少index;
+                                    _robotOpLocation[j + 1].Delete();
+                                    _robotOpLocation.RemoveAt(j + 1);
+                                    k--;
+                                    _endIndex--;
+
+                                }
+                                // j 移动到删除点之后的，再次寻找是否可以找到删除的点;
+                                j = k + 1;
+                                break;
+                            }
+                            else
+                                continue;
+                        }
+
 
                     }
 

@@ -53,7 +53,7 @@ namespace rrtRobot
 
     public partial class TxrrtRobotPathPlannerForm : TxForm
     {
-        
+
         public static double M_PI = 3.1415926;
         public static Control mainTxControl;
         public static TxTransformation TCPLocation; //记录所选机器人的TCP Frame 值，从robot 的Tool frame 到TCP frame 的转换矩阵，用于正向运动学计算
@@ -66,7 +66,7 @@ namespace rrtRobot
         public static TxObjectList collisionSrc;
         public static TxCollisionRoot root;
         public static TxRobot robot;
-        public static List<TxWeldOperation> TargetCalWeldOp= new List<TxWeldOperation>();
+        public static List<TxWeldOperation> TargetCalWeldOp = new List<TxWeldOperation>();
         public static TxServoGun robServerGun;
         private int progressbarNumber = 0;
         private int progressbarCount = 0;
@@ -75,22 +75,24 @@ namespace rrtRobot
         public static bool rrtconnectCal_ongoing = false;
         public List<Tuple<Tuple<Node3D, string>, TxPoseData>> node3D_startptpList;
         public List<Tuple<Tuple<Node3D, string>, TxPoseData>> node3D_endptpList;
-        private const double influenceRadius = 10; // 障碍物影响半径
-        public static int iterate_Count = 0;// 记录由于1000次rrt 迭代计算无法得到结果而跳出的次数，这个次数会决定了rrt生成的RX/RY的旋转角度
-        private static int collisionCount = 0;
         public static List<List<joint>> fullpath;
+        public static List<string> TargetCalLocNames = new List<string>();
+        public static List<joint> Pathend_nodes = new List<joint>();
+
+        public static bool isRCSLoaded = false;
+
 
         // 用于log文件txt的生成，在系统Documents/rrtRobot文件夹下面
         // 获取当前用户的Documents路径
         public static string LogfilePath;
-       
+
         // 定义子文件夹名称和文件名
 
         public char spotagainstCollisionSrc;
         public TxrrtRobotPathPlannerForm()
         {
             GenerateLogfile("dataLog.txt");
-            
+
         }
         public bool checkLicense()
         {
@@ -148,19 +150,19 @@ namespace rrtRobot
             groupBox2.Size = new System.Drawing.Size(495, 103);
             Group_Collision.Size = new System.Drawing.Size(495, 103);
             groupBox1.Size = new System.Drawing.Size(495, 293);
-           
+
             this.Size = new System.Drawing.Size(547, 679);
             this.FormBorderStyle = FormBorderStyle.Fixed3D;
             collisionSrc = new TxObjectList();
-            button1.Location = new System.Drawing.Point(172,562);
+            button1.Location = new System.Drawing.Point(172, 562);
             button1.Size = new System.Drawing.Size(153, 35);
-            m_pathGenerate.Location= new System.Drawing.Point(343, 562);
-            m_pathGenerate.Size= new System.Drawing.Size(143, 35);
+            m_pathGenerate.Location = new System.Drawing.Point(343, 562);
+            m_pathGenerate.Size = new System.Drawing.Size(143, 35);
             m_collisionListPick.Enabled = false;
             button1.Enabled = false;
 
         }
-       
+
         private void txTargetGroupOpEditBoxCtrl_Picked(object sender, TxObjEditBoxCtrl_PickedEventArgs args)
         {
 
@@ -200,9 +202,9 @@ namespace rrtRobot
             {
                 m_GroupTargetOpPick.LoseFocus();
 
-                for(int i=0;i< TargetCalWeldOp.Count;i++)
+                for (int i = 0; i < TargetCalWeldOp.Count; i++)
                 {
-                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " The "+(i+1).ToString()+"th target calculate weld op is "+
+                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " The " + (i + 1).ToString() + "th target calculate weld op is " +
                         TargetCalWeldOp[i].Name + Environment.NewLine);
 
                     textLogfile.SelectionStart = textLogfile.TextLength;
@@ -242,7 +244,7 @@ namespace rrtRobot
         private void m_collisionListPicked(object sender, TxObjComboBoxCtrl_PickedEventArgs args)
         {
             TxObjectBase txObjects = m_collisionListPick.Object as TxObjectBase;
-            if (txObjects==null)
+            if (txObjects == null)
             {
                 m_collisionListPick.LoseFocus();
                 if (collisionSrc.Count != 0)
@@ -255,7 +257,7 @@ namespace rrtRobot
 
 
             collisionSrc.Add(m_collisionListPick.Object);
-            
+
             m_collisionListPick.AddItem(m_collisionListPick.Object.Name, m_collisionListPick.Object);
             m_collisionListPick.LoseFocus();
         }
@@ -355,11 +357,11 @@ namespace rrtRobot
 
 
                 }
-             
-                
-                
+
+
+
                 point weldPoc = new point(tx, ty, tz, rx, ry, rz, 0);
-                ArrayList Solutions = TxRobotAPIClass.robotInverseCal(mainTxControl,robot, weldPoc);
+                ArrayList Solutions = TxRobotAPIClass.robotInverseCal(mainTxControl, robot, weldPoc);
                 while (!postureOK)
                 {
                     if (Solutions.Count != 0)
@@ -380,7 +382,7 @@ namespace rrtRobot
                     rx = ((TxWeldLocationOperation)allWeldPointsExist[i]).AbsoluteLocation.RotationRPY_XYZ.X;
                     ry = ((TxWeldLocationOperation)allWeldPointsExist[i]).AbsoluteLocation.RotationRPY_XYZ.Y;
                     rz = ((TxWeldLocationOperation)allWeldPointsExist[i]).AbsoluteLocation.RotationRPY_XYZ.Z;
-                    Solutions = TxRobotAPIClass.robotInverseCal(mainTxControl,robot, new point(tx, ty, tz, rx, ry, rz, 0));
+                    Solutions = TxRobotAPIClass.robotInverseCal(mainTxControl, robot, new point(tx, ty, tz, rx, ry, rz, 0));
                     LocRotationCount++;
                     if (LocRotationCount == 36)
                     {
@@ -389,7 +391,7 @@ namespace rrtRobot
 
                         textLogfile.SelectionStart = textLogfile.TextLength;
                         textLogfile.ScrollToCaret();
-                        
+
 
                         return false;
                     }
@@ -405,7 +407,7 @@ namespace rrtRobot
                 postureOK = false;
                 LocRotationCount = 0;
 
-               
+
 
 
             }
@@ -479,7 +481,7 @@ namespace rrtRobot
             double servoGunjointChange = TxRobotptpPathCal.calculateServoGunJointChange(p_start, p_end, robot);
             (double value, int index) result = TxRobotptpPathCal.FindLargestAbsoluteWithIndex(jointschange);
 
-            double ptpTime = TxRobotptpPathCal.calculatePTPtime(mainTxControl,jointschange, robot);
+            double ptpTime = TxRobotptpPathCal.calculatePTPtime(mainTxControl, jointschange, robot);
             double ServoGunTime = TxRobotptpPathCal.calculateServoPTPtime(servoGunjointChange, robServerGun);
 
 
@@ -513,7 +515,7 @@ namespace rrtRobot
 
             joint q = p;
             robotPosture = new TxPoseData();
-            while (!TxRobotRRTConnectJoint.collisioncheckforSingleJoint(mainTxControl,ref q))
+            while (!TxRobotRRTConnectJoint.collisioncheckforSingleJoint(mainTxControl, ref q))
             {
 
                 q.j1 = GetRandomDouble(p.j1 - step_count * step * 2, p.j1 + step_count * step * 2, robot.Joints[0].LowerSoftLimit, robot.Joints[0].UpperSoftLimit);
@@ -592,14 +594,14 @@ namespace rrtRobot
         private void m_pathGenerate_Click(object sender, EventArgs e)
         {
 
-            if (TargetCalWeldOp.Count==0) return;
+            if (TargetCalWeldOp.Count == 0) return;
 
             textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Target Robot Path Swept is generating.... " + Environment.NewLine);
 
             textLogfile.SelectionStart = textLogfile.TextLength;
             textLogfile.ScrollToCaret();
 
-            for (int i=0;i< TargetCalWeldOp.Count;i++)
+            for (int i = 0; i < TargetCalWeldOp.Count; i++)
             {
 
                 TxRobotAPIClass.CreateSweptVolume(TargetCalWeldOp[i]);
@@ -624,24 +626,24 @@ namespace rrtRobot
             for (int i = 0; i < root.PairList.Count; i++)
             {
                 (root.PairList[i] as TxCollisionPair).Active = false;
-               
+
             }
             if (mainTxControl == null) mainTxControl = this;
 
-            for (int i=0; i< TargetCalWeldOp.Count; i++)
+            for (int i = 0; i < TargetCalWeldOp.Count; i++)
             {
-                for(int j=0;j< TargetCalWeldOp.Count; j++)
+                for (int j = 0; j < TargetCalWeldOp.Count; j++)
                 {
                     if (i == j) continue;
 
                     collisionSrc.Clear();
-                   
+
                     collisionTar = new TxObjectList();
                     collisionTar.Add(TargetCalWeldOp[i].Robot);
                     collisionTar.Add(TargetCalWeldOp[i].Gun);
-                    collisionSrc.Add((TxRobotAPIClass.GetObjectByName<TxSweptVolume>(TargetCalWeldOp[j].Robot.Name))as ITxObject);
-                    (root.PairList[root.PairList.Count-1] as TxCollisionPair).Active = false;
-                    cd = new TxCollisionPairCreationData("cp_collisionZone"+ TargetCalWeldOp[i].Robot.Name +"_"+ TargetCalWeldOp[j].Robot.Name+"swept", collisionSrc, collisionTar, 3.0);
+                    collisionSrc.Add((TxRobotAPIClass.GetObjectByName<TxSweptVolume>(TargetCalWeldOp[j].Robot.Name)) as ITxObject);
+                    (root.PairList[root.PairList.Count - 1] as TxCollisionPair).Active = false;
+                    cd = new TxCollisionPairCreationData("cp_collisionZone" + TargetCalWeldOp[i].Robot.Name + "_" + TargetCalWeldOp[j].Robot.Name + "swept", collisionSrc, collisionTar, 3.0);
 
                     cp = root.CreateCollisionPair(cd);
 
@@ -650,16 +652,16 @@ namespace rrtRobot
 
                     TxTypeFilter opFilter = new TxTypeFilter(typeof(TxWeldLocationOperation));
                     opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
-                   
+
                     TxObjectList allPointsExist = TargetCalWeldOp[i].GetDirectDescendants(opFilter);
                     bool collision_test = false;
-                    for(int k=0;k< allPointsExist.Count;k++)
+                    for (int k = 0; k < allPointsExist.Count; k++)
                     {
-                       
-                        if(allPointsExist[k].GetType() == typeof(TxWeldLocationOperation))
+
+                        if (allPointsExist[k].GetType() == typeof(TxWeldLocationOperation))
                         {
-                          
-                           TxPoseData currentPosedata= (TargetCalWeldOp[i].Robot).GetPoseAtLocation((TxWeldLocationOperation)allPointsExist[k]);
+
+                            TxPoseData currentPosedata = (TargetCalWeldOp[i].Robot).GetPoseAtLocation((TxWeldLocationOperation)allPointsExist[k]);
                             if (currentPosedata != null)
                             {
                                 (TargetCalWeldOp[i].Robot as TxRobot).CurrentPose = currentPosedata;
@@ -674,9 +676,9 @@ namespace rrtRobot
                                 (TargetCalWeldOp[i].Robot as TxRobot).CurrentPose = currentPosedata;
                             }
                         }
-                           
-                       
-                        
+
+
+
                         if ((!TxRobotAPIClass.Collision_Check(mainTxControl, cd, queryParams, root, collisionSrc, collisionTar, 3.0)) && (!collision_test))
                         {
                             //表示有干涉
@@ -748,7 +750,6 @@ namespace rrtRobot
 
 
         }
-       
 
         private void PathGenerate()
         {
@@ -764,7 +765,7 @@ namespace rrtRobot
             }
 
             TxTypeFilter opFilter = new TxTypeFilter(typeof(TxWeldLocationOperation));
-
+            opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
             TxObjectList allWeldPointsExist = weldTargetOperation.GetDirectDescendants(opFilter);
 
             if (fullpath.Count != node3D_startptpList.Count)
@@ -798,16 +799,36 @@ namespace rrtRobot
             //确认每个焊点是否都进行了进行robot teach 
             for (int i = 0; i < allWeldPointsExist.Count; i++)
             {
-                if ((allWeldPointsExist[i] as TxWeldLocationOperation).RobotConfigurationData == null)
+                if (allWeldPointsExist[i].GetType() == typeof(TxWeldLocationOperation))
                 {
-                    TxMessageBox.Show("please Teach the weld spot target point as reference for Robot ConfigurationData !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
+                    if ((allWeldPointsExist[i] as TxWeldLocationOperation).RobotConfigurationData == null)
+                    {
+                        TxMessageBox.Show("please Teach the weld spot target point as reference for Robot ConfigurationData !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    if ((allWeldPointsExist[i] as TxWeldLocationOperation).RobotExternalAxesData == null)
+                    {
+                        TxMessageBox.Show("please Setup ServerGun Joint Value !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
                 }
-                if ((allWeldPointsExist[i] as TxWeldLocationOperation).RobotExternalAxesData == null)
+                else
                 {
-                    TxMessageBox.Show("please Setup ServerGun Joint Value !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
+                    if ((allWeldPointsExist[i] as TxRoboticViaLocationOperation).RobotConfigurationData == null)
+                    {
+                        TxMessageBox.Show("please Teach the weld spot target point as reference for Robot ConfigurationData !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    if ((allWeldPointsExist[i] as TxRoboticViaLocationOperation).RobotExternalAxesData == null)
+                    {
+                        TxMessageBox.Show("please Setup ServerGun Joint Value !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
+
                 }
+
 
 
             }
@@ -850,10 +871,16 @@ namespace rrtRobot
 
 
                     TxRoboticViaLocationOperation RobFramepostLocation = TxRobotPathOptimizePtp.addrobotPathViaLoc("LocTemp" + allWeldPointsExist[i].Name + j.ToString(), new point(p.x, p.y, p.z,
-                       p.rx, p.ry, p.rz, p.Gun_Open), weldTargetOperation, robot,robServerGun);
+                       p.rx, p.ry, p.rz, p.Gun_Open), weldTargetOperation, robot, robServerGun);
 
-                    weldTargetOperation.MoveChildAfter((TxWeldLocationOperation)allWeldPointsExist[i + 1], RobFramepostLocation);
-
+                    if (allWeldPointsExist[i + 1].GetType() == typeof(TxWeldLocationOperation))
+                    {
+                        weldTargetOperation.MoveChildAfter((TxWeldLocationOperation)allWeldPointsExist[i + 1], RobFramepostLocation);
+                    }
+                    else
+                    {
+                        weldTargetOperation.MoveChildAfter((TxRoboticViaLocationOperation)allWeldPointsExist[i + 1], RobFramepostLocation);
+                    }
 
                     TxRobotConfigurationData txRobotConfigurationData = robot.GetPoseConfiguration(robotPosture);
                     RobFramepostLocation.RobotConfigurationData = txRobotConfigurationData;
@@ -863,8 +890,12 @@ namespace rrtRobot
 
                 pathindex++;
             }
+            try
+            {
+                TxRobotPathOptimizePtp.OperationOptimize(ref weldTargetOperation, robot);
+            }
+            catch (Exception e) { TxRobotRRTConnectJoint.logpathGenerateOK(e.Message); }
 
-            TxRobotPathOptimizePtp.OperationOptimize(ref weldTargetOperation, robot);
             rrtCalThread = null;
 
             GC.Collect();
@@ -873,13 +904,14 @@ namespace rrtRobot
         }
 
 
+
         private Task rrtCalThread;
 
         bool checkAbsoluteFrameSameorNot(TxTransformation r1, TxTransformation r2)
         {
 
-            point p1 = new point(r1.Translation.X, r1.Translation.Y,r1.Translation.Z,
-                r1.RotationRPY_XYZ.X,r1.RotationRPY_XYZ.Y,r1.RotationRPY_XYZ.Z,0);
+            point p1 = new point(r1.Translation.X, r1.Translation.Y, r1.Translation.Z,
+                r1.RotationRPY_XYZ.X, r1.RotationRPY_XYZ.Y, r1.RotationRPY_XYZ.Z, 0);
 
             point p2 = new point(r2.Translation.X, r2.Translation.Y, r2.Translation.Z,
                r2.RotationRPY_XYZ.X, r2.RotationRPY_XYZ.Y, r2.RotationRPY_XYZ.Z, 0);
@@ -916,23 +948,108 @@ namespace rrtRobot
 
             return true;
 
-            
+
         }
 
-        
+        bool MoveSpotWeldZdirectionAvoidCollision(TxWeldLocationOperation spot, double direction, double movesTipZ, out TxTransformation newSpotLoc, out ArrayList Solutions)
+        {
+            double x = ((TxWeldLocationOperation)spot).AbsoluteLocation.Translation.X;
+            double y = ((TxWeldLocationOperation)spot).AbsoluteLocation.Translation.Y;
+            double z = ((TxWeldLocationOperation)spot).AbsoluteLocation.Translation.Z;
+            double rx = ((TxWeldLocationOperation)spot).AbsoluteLocation.RotationRPY_XYZ.X;
+            double ry = ((TxWeldLocationOperation)spot).AbsoluteLocation.RotationRPY_XYZ.Y;
+            double rz = ((TxWeldLocationOperation)spot).AbsoluteLocation.RotationRPY_XYZ.Z;
 
-        private  void button1_Click(object sender, EventArgs e)
+            int gunindex = 0;
+            for (int i = 0; i < spot.RobotExternalAxesData.Count(); i++)
+            {
+                if (spot.RobotExternalAxesData[i].Device.GetType() == typeof(TxServoGun))
+                {
+                    gunindex = i; break;
+                }
+
+            }
+
+            double gunopening = spot.RobotExternalAxesData[gunindex].JointValue;
+
+            TxPoseData spotPoseData = robot.GetPoseAtLocation(spot as ITxRoboticLocationOperation);
+
+
+            TxVector rotation = new TxVector();
+            rotation.X = 0;
+            rotation.Y = 0;
+            rotation.Z = 0;
+            movesTipZ *= direction;
+            TxTransformation txTransformation = new TxTransformation();
+
+            txTransformation.Translation.X = 0;
+            txTransformation.Translation.Y = 0;
+            txTransformation.Translation.Z = movesTipZ; //退枪3mm;
+
+            txTransformation.RotationRPY_XYZ = rotation;
+
+            TxVector Translation = new TxVector();
+            Translation.X = 0;
+            Translation.Y = 0;
+            Translation.Z = movesTipZ;
+
+
+            TxTransformation loca_Translate = new TxTransformation(Translation, TxTransformation.TxTransformationType.Translate);
+
+            TxTransformation weldFrameLocation = ((TxWeldLocationOperation)spot).AbsoluteLocation;
+
+            newSpotLoc = weldFrameLocation * txTransformation * loca_Translate;
+
+
+            double tx = newSpotLoc.Translation.X;
+            double ty = newSpotLoc.Translation.Y;
+            double tz = newSpotLoc.Translation.Z;
+            double Rx = newSpotLoc.RotationRPY_XYZ.X;
+            double Ry = newSpotLoc.RotationRPY_XYZ.Y;
+            double Rz = newSpotLoc.RotationRPY_XYZ.Z;
+            Solutions = TxRobotAPIClass.robotInverseCal(mainTxControl, robot, new point(tx, ty, tz, rx, ry, rz, gunopening));
+            if (Solutions.Count == 0)
+            {
+                return false;
+            }
+            else
+            {
+                TxRobotAPIClass.TxRobotPostureGenerate(mainTxControl, robot, TxrrtRobotPathPlannerForm.robServerGun, Solutions, gunopening);
+                if (TxRobotAPIClass.Collision_Check(mainTxControl, cd, queryParams, root, collisionSrc, collisionTar, 3.0))
+                {
+                    return true;
+                }
+                else
+                {
+                    if (direction < 0) return false;
+                    else if (!MoveSpotWeldZdirectionAvoidCollision(spot, -1 * direction, movesTipZ, out newSpotLoc, out Solutions)) return false;
+
+
+                }
+
+
+            }
+
+            return true;
+
+        }
+
+
+        private void button1_Click(object sender, EventArgs e)
         {
 
-            if (mainTxControl == null)  mainTxControl = this;
-            /*
-             * 清空log文件
-             */
-            FileStream stream = File.Open(LogfilePath, FileMode.OpenOrCreate, FileAccess.Write);
-            stream.Seek(0, SeekOrigin.Begin);
-            stream.SetLength(0);
-            stream.Close();
-           if( TxApplication.ActiveDocument.SimulationPlayer.TimeInterval != 0.01)
+            if (mainTxControl == null) mainTxControl = this;
+            if (!rrtconnectCal_ongoing)
+            {
+                /*
+            * 清空log文件
+            */
+                FileStream stream = File.Open(LogfilePath, FileMode.OpenOrCreate, FileAccess.Write);
+                stream.Seek(0, SeekOrigin.Begin);
+                stream.SetLength(0);
+                stream.Close();
+            }
+            if (TxApplication.ActiveDocument.SimulationPlayer.TimeInterval != 0.01)
             {
                 textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Warning: Please set the simulation Time Interval value to 0.01!" + Environment.NewLine);
 
@@ -946,9 +1063,9 @@ namespace rrtRobot
             for (int i = 0; i < TargetCalWeldOp.Count; i++)
             {
 
-                if (TargetCalWeldOp[i].Robot==null)
+                if (TargetCalWeldOp[i].Robot == null)
                 {
-                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + TargetCalWeldOp[i].Name+" No Robot select for the Operation !" + Environment.NewLine);
+                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + TargetCalWeldOp[i].Name + " No Robot select for the Operation !" + Environment.NewLine);
 
                     textLogfile.SelectionStart = textLogfile.TextLength;
                     textLogfile.ScrollToCaret();
@@ -990,7 +1107,7 @@ namespace rrtRobot
                     }
                     if ((allWeldPointsExist[j] as TxWeldLocationOperation).RobotExternalAxesData == null)
                     {
-                       textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + allWeldPointsExist[j].Name+" please Setup ServerGun Joint Value !" + Environment.NewLine);
+                        textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + allWeldPointsExist[j].Name + " please Setup ServerGun Joint Value !" + Environment.NewLine);
 
                         textLogfile.SelectionStart = textLogfile.TextLength;
                         textLogfile.ScrollToCaret();
@@ -1001,11 +1118,8 @@ namespace rrtRobot
                 }
             }
 
-            
-
-
-               //创建碰撞干涉的检查类组;
-               root = TxApplication.ActiveDocument.CollisionRoot;
+            //创建碰撞干涉的检查类组;
+            root = TxApplication.ActiveDocument.CollisionRoot;
             for (int i = 0; i < root.PairList.Count; i++)
             {
                 string collisionName = root.PairList[i].Name;
@@ -1023,19 +1137,36 @@ namespace rrtRobot
                     (root.PairList[i] as TxCollisionPair).Active = false;
                     continue;
                 }
-                    
+
             }
             //遍历所有需要计算的机器人轨迹，逐个轨迹进行计算
             allWeldPointsExist = new TxObjectList();
-            for (int i=0;i<TargetCalWeldOp.Count;i++)
+            for (int i = 0; i < TargetCalWeldOp.Count; i++)
             {
-                
-                
+
+                isRCSLoaded = false;
                 robot = (TargetCalWeldOp[i].Robot) as TxRobot;
                 robServerGun = (TargetCalWeldOp[i].Gun) as TxServoGun;
-                if(robServerGun.NonCollidingEntities.Count==0)
+
+                if ((robot.IsRCSTurnedOffForNonSimulationActions == false
+                    && robot.IsRCSTurnedOffForSimulationActions == false
+                    && robot.Controller.Name != "default"))
+
                 {
-                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + robServerGun.Name+" Gun Tip not set Non-collision check for" + Environment.NewLine);
+                    isRCSLoaded = true;
+
+                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + robot.Name + " rrtRobot checked the robot controller is not default, will run as " + robot.Controller.Name + " status,which may affect calculation speed !" + Environment.NewLine);
+
+                    textLogfile.SelectionStart = textLogfile.TextLength;
+                    textLogfile.ScrollToCaret();
+
+                }
+
+                //确认robot 是否加载了rcs
+
+                if (robServerGun.NonCollidingEntities.Count != 0)
+                {
+                    textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + robServerGun.Name + " Gun Tip not set Non-collision check for" + Environment.NewLine);
 
                     textLogfile.SelectionStart = textLogfile.TextLength;
                     textLogfile.ScrollToCaret();
@@ -1064,11 +1195,11 @@ namespace rrtRobot
                 if (ToolJointOpening == 0)
                 {
 
-                    TxMessageBox.Show("Not Get the " +(i+1).ToString()+" Weld Path Gun Openning Data, please re-check the Gun !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    TxMessageBox.Show("Not Get the " + (i + 1).ToString() + " Weld Path Gun Openning Data, please re-check the Gun !", "Warnning", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
 
                 }
-                if(!checkAbsoluteFrameSameorNot(robot.TCPF.AbsoluteLocation,robServerGun.TCPF.AbsoluteLocation))
+                if (!checkAbsoluteFrameSameorNot(robot.TCPF.AbsoluteLocation, robServerGun.TCPF.AbsoluteLocation))
                 {
                     textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Current the " + (i + 1).ToString() + " Weld Path Robot TCP is not Gun TCP !" + Environment.NewLine);
 
@@ -1106,12 +1237,14 @@ namespace rrtRobot
                 }
 
                 weldTargetOperation = TargetCalWeldOp[i] as TxWeldOperation;
-                
-                allWeldPointsExist = weldTargetOperation.GetDirectDescendants(new TxTypeFilter(typeof(TxWeldLocationOperation)));
+                TxTypeFilter opFilter = new TxTypeFilter(typeof(TxWeldLocationOperation));
+                opFilter.AddIncludedType(typeof(TxRoboticViaLocationOperation));
 
-               
-                if (!weldOperationSpotAllocate(weldTargetOperation)) return;
-                
+                allWeldPointsExist = weldTargetOperation.GetDirectDescendants(opFilter);
+
+
+                //if (!weldOperationSpotAllocate(weldTargetOperation)) return;
+
 
                 progressbarCount = allWeldPointsExist.Count - 1;
                 fullpath = new List<List<joint>>();
@@ -1119,32 +1252,138 @@ namespace rrtRobot
                 node3D_endptpList = new List<Tuple<Tuple<Node3D, string>, TxPoseData>>();
                 for (int j = 0; j < allWeldPointsExist.Count - 1; j++)
                 {
-
-                    double x = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.X;
-                    double y = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Y;
-                    double z = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Z;
-                    double rx = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.X;
-                    double ry = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Y;
-                    double rz = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Z;
-
-
-
-                    TxPoseData spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j] as ITxRoboticLocationOperation);
-
-                    Node3D node3D_start = new Node3D(x, y, z, rx, ry, rz);
-                    node3D_startptpList.Add(Tuple.Create(Tuple.Create(node3D_start, allWeldPointsExist[j].Name), spotPoseData));
-
-                    x = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.X;
-                    y = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Y;
-                    z = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Z;
-                    rx = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.X;
-                    ry = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Y;
-                    rz = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Z;
+                    if (allWeldPointsExist[j].GetType() == typeof(TxWeldLocationOperation))
+                    {
+                        TargetCalLocNames.Add(((TxWeldLocationOperation)allWeldPointsExist[j]).Name);
+                        double x = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.X;
+                        double y = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Y;
+                        double z = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Z;
+                        double rx = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.X;
+                        double ry = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Y;
+                        double rz = ((TxWeldLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Z;
 
 
-                    Node3D node3D_goal = new Node3D(x, y, z, rx, ry, rz);
-                    spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j + 1] as ITxRoboticLocationOperation);
-                    node3D_endptpList.Add(Tuple.Create(Tuple.Create(node3D_goal, allWeldPointsExist[j + 1].Name), spotPoseData));
+
+                        TxPoseData spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j] as ITxRoboticLocationOperation);
+
+                        TxTransformation newSpotLoc = new TxTransformation();
+                        ArrayList Solutions = new ArrayList();
+                        bool spotFlip = MoveSpotWeldZdirectionAvoidCollision(((TxWeldLocationOperation)allWeldPointsExist[j]), 1.0, 5.0, out newSpotLoc, out Solutions);
+                        if (!spotFlip)
+                        {
+
+                            spotFlip = MoveSpotWeldZdirectionAvoidCollision(((TxWeldLocationOperation)allWeldPointsExist[j]), 1.0, 3.0, out newSpotLoc, out Solutions);
+
+                            if (!spotFlip)
+                            {
+                                textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Warning : Spot " + allWeldPointsExist[j].Name + " can not moved in Z direction" + Environment.NewLine);
+
+                                textLogfile.SelectionStart = textLogfile.TextLength;
+                                textLogfile.ScrollToCaret();
+                                return;
+                            }
+
+                        }
+
+                        int nearestIndex = TxRobotPathOptimizePtp.ChooseBestInverseSolution(ref Solutions, spotPoseData);
+
+                        spotPoseData = (TxPoseData)Solutions[nearestIndex];
+
+                        Node3D node3D_start = new Node3D(newSpotLoc.Translation.X, newSpotLoc.Translation.Y, newSpotLoc.Translation.Z,
+                               newSpotLoc.RotationRPY_XYZ.X, newSpotLoc.RotationRPY_XYZ.Y, newSpotLoc.RotationRPY_XYZ.Z);
+
+                        node3D_startptpList.Add(Tuple.Create(Tuple.Create(node3D_start, allWeldPointsExist[j].Name), spotPoseData));
+                    }
+                    else
+                    {
+                        TargetCalLocNames.Add(((TxRoboticViaLocationOperation)allWeldPointsExist[j]).Name);
+                        double x = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.X;
+                        double y = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Y;
+                        double z = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.Translation.Z;
+                        double rx = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.X;
+                        double ry = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Y;
+                        double rz = ((TxRoboticViaLocationOperation)allWeldPointsExist[j]).AbsoluteLocation.RotationRPY_XYZ.Z;
+
+
+
+                        TxPoseData spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j] as ITxRoboticLocationOperation);
+
+                        Node3D node3D_start = new Node3D(x, y, z, rx, ry, rz);
+                        node3D_startptpList.Add(Tuple.Create(Tuple.Create(node3D_start, allWeldPointsExist[j].Name), spotPoseData));
+
+                    }
+
+                    if (allWeldPointsExist[j + 1].GetType() == typeof(TxWeldLocationOperation))
+                    {
+                        double x = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.X;
+                        double y = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Y;
+                        double z = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Z;
+                        double rx = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.X;
+                        double ry = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Y;
+                        double rz = ((TxWeldLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Z;
+
+
+                        // Node3D node3D_goal = new Node3D(x, y, z, rx, ry, rz);
+                        TxPoseData spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j + 1] as ITxRoboticLocationOperation);
+
+
+                        TxTransformation newSpotLoc = new TxTransformation();
+                        ArrayList Solutions = new ArrayList();
+                        bool spotFlip = MoveSpotWeldZdirectionAvoidCollision(((TxWeldLocationOperation)allWeldPointsExist[j + 1]), 1.0, 5.0, out newSpotLoc, out Solutions);
+                        if (!spotFlip)
+                        {
+
+                            spotFlip = MoveSpotWeldZdirectionAvoidCollision(((TxWeldLocationOperation)allWeldPointsExist[j + 1]), 1.0, 3.0, out newSpotLoc, out Solutions);
+                            if (!spotFlip)
+                            {
+                                textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Warning : Spot " + allWeldPointsExist[j + 1].Name + " can not moved in Z direction" + Environment.NewLine);
+
+                                textLogfile.SelectionStart = textLogfile.TextLength;
+                                textLogfile.ScrollToCaret();
+                                return;
+                            }
+
+                        }
+                        int nearestIndex = TxRobotPathOptimizePtp.ChooseBestInverseSolution(ref Solutions, spotPoseData);
+
+                        spotPoseData = (TxPoseData)(Solutions[nearestIndex]);
+
+                        Node3D node3D_goal = new Node3D(newSpotLoc.Translation.X, newSpotLoc.Translation.Y, newSpotLoc.Translation.Z,
+                               newSpotLoc.RotationRPY_XYZ.X, newSpotLoc.RotationRPY_XYZ.Y, newSpotLoc.RotationRPY_XYZ.Z);
+
+
+                        node3D_endptpList.Add(Tuple.Create(Tuple.Create(node3D_goal, allWeldPointsExist[j + 1].Name), spotPoseData));
+
+                    }
+                    else
+                    {
+                        double x = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.X;
+                        double y = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Y;
+                        double z = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.Translation.Z;
+                        double rx = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.X;
+                        double ry = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Y;
+                        double rz = ((TxRoboticViaLocationOperation)allWeldPointsExist[j + 1]).AbsoluteLocation.RotationRPY_XYZ.Z;
+
+
+                        Node3D node3D_goal = new Node3D(x, y, z, rx, ry, rz);
+                        TxPoseData spotPoseData = robot.GetPoseAtLocation(allWeldPointsExist[j + 1] as ITxRoboticLocationOperation);
+                        node3D_endptpList.Add(Tuple.Create(Tuple.Create(node3D_goal, allWeldPointsExist[j + 1].Name), spotPoseData));
+
+                    }
+
+
+
+
+
+                }
+                if (allWeldPointsExist[allWeldPointsExist.Count - 1].GetType() == typeof(TxWeldLocationOperation))
+                {
+                    TargetCalLocNames.Add(((TxWeldLocationOperation)allWeldPointsExist[allWeldPointsExist.Count - 1]).Name);
+
+                }
+                else
+                {
+                    TargetCalLocNames.Add(((TxRoboticViaLocationOperation)allWeldPointsExist[allWeldPointsExist.Count - 1]).Name);
 
                 }
 
@@ -1162,7 +1401,7 @@ namespace rrtRobot
                 }
 
 
-                
+
 
                 /* rrtconnectCalOnGoing_Async()异步启动rrt计算。
                  * Tecnomatix不支持多线程开发，所以为了达到进度条的显示和软件的可视化，采用异步机制；
@@ -1171,10 +1410,10 @@ namespace rrtRobot
                 TxRobotRRTConnectJoint.logpathGenerateOK("Path Calculate Start !");
                 textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " The " + (i + 1).ToString()
                     + "th Path Calculate Start !" + Environment.NewLine);
-               
+
                 textLogfile.SelectionStart = textLogfile.TextLength;
                 textLogfile.ScrollToCaret();
-
+                Pathend_nodes.Clear();
                 rrtconnectCalOnGoingPtp_Async();
                 if (!rrtconnectCal_ongoing)
                 {
@@ -1185,8 +1424,9 @@ namespace rrtRobot
                     textLogfile.ScrollToCaret();
                     break;
                 }
- 
+
                 PathGenerate();
+                TargetCalLocNames.Clear();
                 UpdateProgressBar(PathprogressBar.Maximum);
                 TxRobotRRTConnectJoint.logpathGenerateOK("Path Calculate end !");
                 textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " The " + (i + 1).ToString()
@@ -1202,9 +1442,6 @@ namespace rrtRobot
         }
         private void rrtconnectCalOnGoingPtp_Async()
         {
-
-            
-
             try
             {
                 for (int i = 0; i < node3D_startptpList.Count; i++)
@@ -1267,41 +1504,14 @@ namespace rrtRobot
 
                      );
 
-
                     rrt.rrt_connectJointPtp(mainTxControl, start_p, end_p);
 
                     if (!TxRobotRRTConnectJoint.currentpathdone) //表示当下的计算没有产生合适的路径而退出
                     {
-                        iterate_Count++;
-                        /*
-                         * 当迭代1000次之后，需要取中间点，之前的算法是取start 点和end 点的中点;
-                         * 改变策略，之前从start 点运动到end 点 找到干涉的姿态后，记录干涉的点；
-                         * 以干涉点为起始点，通过generatePassThroughPoints()函数改变干涉嗲拿的姿态并加入到轨迹中进行运算
-                        */
-                        point bypassPoint = new point((node3D_goal.x + node3D_start.x) / 2, (node3D_goal.y + node3D_start.y) / 2, (node3D_goal.z + node3D_start.z) / 2,
-                                  node3D_goal.rx, node3D_goal.ry, node3D_goal.rz, ToolJointOpening);
-                        TxPoseData bypassPosture = robstartPosedata;
-                        bool bypassPointOK = getptpPassthroughPoints(start_p, end_p, ref bypassPoint, out bypassPosture);
-                        if (bypassPointOK)
-                        {
-                            Node3D p_start_Node = new Node3D(bypassPoint.x, bypassPoint.y, bypassPoint.z, bypassPoint.rx, bypassPoint.ry, bypassPoint.rz);
-                            node3D_startptpList.Insert(i + 1, Tuple.Create(Tuple.Create(p_start_Node, "bypass"), bypassPosture));
-
-                            node3D_endptpList.Insert(i, Tuple.Create(Tuple.Create(p_start_Node, "bypass"), bypassPosture));
-
-                            i--;
-                            rrt.Dispose();
-                            continue;
-
-                        }
-                        else
-                        {
-                            i--;
-                            rrt.Dispose();
-                            continue;
-                        }
-
-
+                        i--;
+                        rrt.Dispose();
+                        TxRobotRRTConnectJoint.logpathGenerateOK("Re-calcualed the " + (i + 1).ToString() + " Path!");
+                        continue;
                     }
 
                     /*
@@ -1323,20 +1533,17 @@ namespace rrtRobot
                 }
 
 
-                
-               // rrtconnectCal_ongoing = false;
-
-
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
 
                 TxRobotRRTConnectJoint.logpathGenerateOK(ex.Message);
 
 
             }
-            
-            
-            
+
+
+
 
         }
         private void UpdateProgressBar(int value)
@@ -1353,7 +1560,7 @@ namespace rrtRobot
             }
         }
 
-        private void SetButtonState(System.Windows.Forms.Button myButton,bool enabled)
+        private void SetButtonState(System.Windows.Forms.Button myButton, bool enabled)
         {
             if (myButton.InvokeRequired)
             {
@@ -1377,5 +1584,19 @@ namespace rrtRobot
             }
         }
 
+        private void TxrrtRobotPathPlannerForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            TargetCalWeldOp.Clear();
+            TargetCalLocNames.Clear();
+            if (node3D_startptpList != null) node3D_startptpList.Clear();
+            if (node3D_endptpList != null) node3D_endptpList.Clear();
+            if (fullpath != null) fullpath.Clear();
+            if (robot != null) robot = null;
+            if (robServerGun != null) robServerGun = null;
+            if (collisionSrc != null) collisionSrc = null;
+            if (collisionTar != null) collisionTar = null;
+        }
+
+       
     }
 }

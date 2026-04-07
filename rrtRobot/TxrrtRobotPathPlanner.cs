@@ -47,8 +47,7 @@ namespace rrtRobot
 
             get
             {
-                //return StringTable.LargeBitmap;
-                return StringTable.Bitmap;
+                return StringTable.LargeBitmap;
             }
         }
 

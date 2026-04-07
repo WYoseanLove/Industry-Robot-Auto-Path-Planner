@@ -45,11 +45,11 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="Tecnomatix.Engineering">
-      <HintPath>..\..\..\..\..\..\Program Files\Tecnomatix_2402\eMPower\Tecnomatix.Engineering.dll</HintPath>
+      <HintPath>C:\Program Files\Tecnomatix_2402\eMPower\Tecnomatix.Engineering.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Tecnomatix.Engineering.Ui">
-      <HintPath>..\..\..\..\..\..\Program Files\Tecnomatix_2402\eMPower\Tecnomatix.Engineering.Ui.dll</HintPath>
+      <HintPath>C:\Program Files\Tecnomatix_2402\eMPower\Tecnomatix.Engineering.Ui.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

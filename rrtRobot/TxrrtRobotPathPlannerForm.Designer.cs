@@ -185,8 +185,8 @@ namespace rrtRobot
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "TxrrtRobotPathPlannerForm";
-            this.SemiModal = false;
             this.ShouldCloseOnDocumentUnloading = true;
+            this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.TxrrtRobotPathPlannerForm_FormClosed);
             this.Group_Collision.ResumeLayout(false);
             this.Group_Collision.PerformLayout();
             this.groupBox1.ResumeLayout(false);

@@ -33,14 +33,13 @@ namespace rrtRobot
          * 与路径的平滑无关,在路径的优化函数中,会挑选出最优解;
          * 3. Gun_Opening 参数存储了法兰盘安装轴的数值例如焊钳
          */
-
-        public static void TxRobotPostureGenerate(Control control, TxRobot robot,TxServoGun servoGun, ArrayList Solutions, double Gun_openning)
+        public static void TxRobotPostureGenerate(Control control, TxRobot robot, TxServoGun servoGun, ArrayList Solutions, double Gun_openning)
         {
 
             if (control.InvokeRequired)
             {
                 // Use Invoke to call this method on the UI thread
-                control.Invoke(new Action<Control, TxRobot, TxServoGun , ArrayList,  double>(TxRobotPostureGenerate), control, robot, servoGun, Solutions,  Gun_openning);
+                control.Invoke(new Action<Control, TxRobot, TxServoGun, ArrayList, double>(TxRobotPostureGenerate), control, robot, servoGun, Solutions, Gun_openning);
             }
             else
             {
@@ -65,7 +64,6 @@ namespace rrtRobot
 
 
         }
-       
         /* public static ArrayList robotInverseCal(TxRobot robot, point target)
          * Robot inverse kinematics calculations are performed using the built-in functions of TECNOMATIX. 
          * Other inverse kinematics functions (custom-defined) can also be substituted.
@@ -159,14 +157,14 @@ namespace rrtRobot
         public static void CreateSweptVolume(TxWeldOperation weldOp)
         {
             objHash.Clear();
-            
+
             TxSimulationPlayer player = new TxSimulationPlayer();
             player.SetOperation(weldOp);
             player.TimeIntervalReached += player_TimeIntervalReached;
             player.PlayWithoutRefresh();
             player.TimeIntervalReached -= player_TimeIntervalReached;
             player.Rewind();
-            
+
 
             TxRobot rob = weldOp.Robot as TxRobot;
             TxSweptVolumeCreationData svCredata = new TxSweptVolumeCreationData();
@@ -214,10 +212,10 @@ namespace rrtRobot
                 }
             }
 
-           
 
 
-    }
+
+        }
 
 
         public static T GetObjectByName<T>(string objectName) where T : class, ITxObject
@@ -238,6 +236,149 @@ namespace rrtRobot
 
             return foundObj;
         }
+
+        public static TxComponent CreateResourcePathCurve(int n, string Name)
+        {
+            TxLocalComponentCreationData creationData = new TxLocalComponentCreationData(Name + n.ToString());
+            TxComponent x = TxApplication.ActiveDocument.PhysicalRoot.CreateLocalComponent(creationData);
+
+            return x;
+        }
+        public static TxComponent CreateResourceobbs(int n, string Name)
+        {
+            TxLocalComponentCreationData creationData = new TxLocalComponentCreationData(Name + n.ToString());
+            TxComponent comp = TxApplication.ActiveDocument.PhysicalRoot.CreateLocalComponent(creationData);
+
+
+            return comp;
+        }
+        public static void CreateSphereView(Control control, joint q, TxRobot robot, TxComponent comp, TxColor color)
+        {
+            try
+            {
+
+
+                var arr = new ArrayList(q.ToArray());
+                var robotPosture = new TxPoseData();
+                robotPosture.JointValues = arr;
+
+                var sols = new ArrayList { robotPosture };
+                TxRobotAPIClass.TxRobotPostureGenerate(
+                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, q.Sever_Gun);
+
+                point start = new point(
+
+                        robot.TCPF.AbsoluteLocation.Translation.X,
+                        robot.TCPF.AbsoluteLocation.Translation.Y,
+                        robot.TCPF.AbsoluteLocation.Translation.Z,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
+                      q.Sever_Gun
+                   );
+                TxSphereCreationData data = new TxSphereCreationData();
+                data.Name = "obs";
+                data.AbsoluteLocation = new TxTransformation(1, 0, 0, start.x, 0, 1, 0, start.y, 0, 0, 1, start.z);
+
+                data.Radius = 6;
+
+                data.SetAsDisplay();
+
+                comp.CreateSolidSphere(data);
+                comp.Color = color;
+
+            }
+            catch (Exception)
+            {
+                return;
+
+            }
+
+        }
+        public static void TxcreateCurvePath(Control control, TxComponent x, joint START, joint END, string Index, TxRobot robot, TxColor color)
+        {
+            try
+            {
+                var arr = new ArrayList(START.ToArray());
+                var robotPosture = new TxPoseData();
+                robotPosture.JointValues = arr;
+
+                var sols = new ArrayList { robotPosture };
+                TxRobotAPIClass.TxRobotPostureGenerate(
+                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, START.Sever_Gun);
+
+                point start = new point(
+
+                        robot.TCPF.AbsoluteLocation.Translation.X,
+                        robot.TCPF.AbsoluteLocation.Translation.Y,
+                        robot.TCPF.AbsoluteLocation.Translation.Z,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
+                      START.Sever_Gun
+                   );
+
+
+
+                arr = new ArrayList(END.ToArray());
+                robotPosture = new TxPoseData();
+                robotPosture.JointValues = arr;
+
+                sols = new ArrayList { robotPosture };
+                TxRobotAPIClass.TxRobotPostureGenerate(
+                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, END.Sever_Gun);
+
+                point end = new point(
+
+                        robot.TCPF.AbsoluteLocation.Translation.X,
+                        robot.TCPF.AbsoluteLocation.Translation.Y,
+                        robot.TCPF.AbsoluteLocation.Translation.Z,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
+                       robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
+                      END.Sever_Gun
+                   );
+
+                if (x == null) return;
+                TxSphereCreationData data = new TxSphereCreationData();
+                data.Name = "start" + Index;
+                data.AbsoluteLocation = new TxTransformation(1, 0, 0, start.x, 0, 1, 0, start.y, 0, 0, 1, start.z);
+
+                data.Radius = 1;
+
+                data.SetAsDisplay();
+
+                x.CreateSolidSphere(data);
+
+                data = new TxSphereCreationData();
+                data.Name = "end" + Index;
+                data.AbsoluteLocation = new TxTransformation(1, 0, 0, end.x, 0, 1, 0, end.y, 0, 0, 1, end.z);
+
+                data.Radius = 1;
+                data.SetAsDisplay();
+
+                x.CreateSolidSphere(data);
+
+
+                TxLineCreationData dataline = new TxLineCreationData();
+
+                dataline.StartPoint = new TxVector(start.x, start.y, start.z);
+                dataline.EndPoint = new TxVector(end.x, end.y, end.z);
+
+                dataline.SetAsDisplay();
+                x.CreateLine(dataline);
+                x.Color = color;
+
+
+            }
+            catch (Exception)
+            {
+                return;
+
+            }
+
+        }
+
 
     }
 }
