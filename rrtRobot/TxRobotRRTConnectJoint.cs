@@ -1619,7 +1619,7 @@ namespace rrtRobot
 
             path_points_start.AddRange(path_points_end);
             start_nodes.Clear();
-            //TxrrtRobotPathPlannerForm.Pathend_nodes.AddRange(path_points_end);
+            TxrrtRobotPathPlannerForm.Pathend_nodes.AddRange(path_points_end);
             end_nodes.Clear();
             logpathGenerateOK(" Path Generate OK! " + IterationCounts.ToString());
           
