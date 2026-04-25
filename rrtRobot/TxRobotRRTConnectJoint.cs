@@ -824,19 +824,18 @@ namespace rrtRobot
             using (var robotPosture = new TxPoseData())
             {
                 step.ToArray();
+                var arr = new ArrayList(step.ToArray());
+                robotPosture.JointValues = arr;
+                var sols = new ArrayList { robotPosture };
+                //修改了这里，先生成posture,将机器人的姿态更新，再检测是否超值，
+                //适合于FANUC机器人2/3轴联动的
+                TxRobotAPIClass.TxRobotPostureGenerate(
+                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, step.Sever_Gun);
                 for (int i = 0; i < 6; i++)
                 {
                     if ((step.ToArray()[i] < robot.Joints[i].LowerSoftLimit) || (step.ToArray()[i] > robot.Joints[i].UpperSoftLimit)) return false;
 
                 }
-
-                var arr = new ArrayList(step.ToArray());
-                robotPosture.JointValues = arr;
-
-                var sols = new ArrayList { robotPosture };
-                TxRobotAPIClass.TxRobotPostureGenerate(
-                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, step.Sever_Gun);
-
                 if (TxRobotAPIClass.Collision_Check(
                     control, cd, queryParams, root, collisionSrc, collisionTar, 5.0))
                     return true;
@@ -1081,6 +1080,34 @@ namespace rrtRobot
                 }
             }
         }
+        private void AppendPathEndNodesToStartTree(Control control)
+        {
+            if (TxrrtRobotPathPlannerForm.Pathend_nodes.Count <= 1)
+            {
+                TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
+                return;
+            }
+
+            TxrrtRobotPathPlannerForm.Pathend_nodes.Reverse();
+
+            for (int i = 1; i < TxrrtRobotPathPlannerForm.Pathend_nodes.Count; i++)
+            {
+                Node3D_joint newJointLoc = new Node3D_joint();
+                Node3D_joint parentNode = (i == 1) ? start_nodes[0] : start_nodes.Last();
+
+                newJointLoc.loc = TxrrtRobotPathPlannerForm.Pathend_nodes[i];
+                newJointLoc.parent = parentNode;
+                newJointLoc.step_size = dist(newJointLoc.loc, parentNode.loc);
+                newJointLoc.cost = newJointLoc.step_size + parentNode.cost;
+
+                minimal_cost(control, newJointLoc, IterationCounts);
+
+                start_nodes.Add(newJointLoc);
+                nodecount_start++;
+            }
+
+            TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
+        }
         public void path_Points(int index_1, int index_2) // final path points will be keep at path_points_start and path_points_end List
         {
             pathcount_start = 0;
@@ -1242,27 +1269,6 @@ namespace rrtRobot
             start_nodes.Add(start_node);
 
             nodecount_start++;
-            if (TxrrtRobotPathPlannerForm.Pathend_nodes.Count != 0)
-            {
-                TxrrtRobotPathPlannerForm.Pathend_nodes.Reverse();
-                for (int i = 0; i < TxrrtRobotPathPlannerForm.Pathend_nodes.Count; i++)
-                {
-                    if (dist(TxrrtRobotPathPlannerForm.Pathend_nodes[i], start_node.loc) <= 1e-6) continue;
-
-                    Node3D_joint newJointLoc = new Node3D_joint();
-
-                    newJointLoc.loc = TxrrtRobotPathPlannerForm.Pathend_nodes[i];
-                    newJointLoc.parent = start_nodes.Last();
-                    newJointLoc.step_size = dist(newJointLoc.loc, start_nodes.Last().loc);
-                    newJointLoc.cost = newJointLoc.step_size + start_nodes.Last().cost;
-                    start_nodes.Add(newJointLoc);
-                    nodecount_start++;
-                }
-
-
-                TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
-            }
-
             end_nodes.Add(end_node);
             nodecount_end++;
             currentpathdone = false;
@@ -1335,6 +1341,10 @@ namespace rrtRobot
                 }
                 sub_state = 0;
                 IterationCounts++;
+                if (IterationCounts >= 3000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
+                {
+                    AppendPathEndNodesToStartTree(control);
+                }
                 if ((IterationCounts / threshold) == 12)
                 {
                     if (x != null)
