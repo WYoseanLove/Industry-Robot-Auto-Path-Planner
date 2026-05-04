@@ -441,6 +441,7 @@ namespace rrtRobot
         private List<Node3D_joint> end_nodes = new List<Node3D_joint>(10000);
         private int nodecount_end = 0;
         public static List<joint> obs;
+        private TxComponent openSideCandidateVisual;//开放侧的可视化；
 
         private int IterationCounts = 0;//记录rrtconnect 的迭代次数；
 
@@ -672,7 +673,120 @@ namespace rrtRobot
 
             return boundaryNodes;
         }
+        private List<BoundaryNodeInfo> IdentifyBoundaryNodes_ByAngleClustering_FromReferenceRoot(
+            Control control,
+            int treeState,
+            joint referenceRoot,
+            double angleThresholdDegrees)
+        {
+            List<Node3D_joint> nodeList = treeState == 1 ? start_nodes : end_nodes;
 
+            if (nodeList.Count <= 1)
+                return new List<BoundaryNodeInfo>();
+
+            point centerPoint3D = ConvertJointToPoint(control, referenceRoot);
+            double centerX = centerPoint3D.x;
+            double centerY = centerPoint3D.y;
+            double centerZ = centerPoint3D.z;
+
+            List<NodeInfo3D> nodeInfos = new List<NodeInfo3D>();
+
+            for (int i = 0; i < nodeList.Count; i++)
+            {
+                joint nodeJoint = nodeList[i].loc;
+                point nodePoint3D = ConvertJointToPoint(control, nodeJoint);
+
+                double dx = nodePoint3D.x - centerX;
+                double dy = nodePoint3D.y - centerY;
+                double dz = nodePoint3D.z - centerZ;
+                double distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (distance < 1e-6)
+                    continue;
+
+                double[] direction = new double[3]
+                {
+            dx / distance,
+            dy / distance,
+            dz / distance
+                };
+
+                nodeInfos.Add(new NodeInfo3D
+                {
+                    Index = i,
+                    Position = nodeJoint,
+                    Position3D = nodePoint3D,
+                    Direction = direction,
+                    DistanceToCenter = distance
+                });
+            }
+
+            if (nodeInfos.Count == 0)
+                return new List<BoundaryNodeInfo>();
+
+            double angleThresholdRadians = angleThresholdDegrees * Math.PI / 180.0;
+            double cosThreshold = Math.Cos(angleThresholdRadians);
+
+            List<NodeAngleCluster> clusters = new List<NodeAngleCluster>();
+
+            foreach (var nodeInfo in nodeInfos)
+            {
+                bool addedToCluster = false;
+
+                foreach (var cluster in clusters)
+                {
+                    double dotProduct =
+                        nodeInfo.Direction[0] * cluster.RepresentativeDirection[0] +
+                        nodeInfo.Direction[1] * cluster.RepresentativeDirection[1] +
+                        nodeInfo.Direction[2] * cluster.RepresentativeDirection[2];
+
+                    if (dotProduct >= cosThreshold)
+                    {
+                        cluster.Nodes.Add(nodeInfo);
+
+                        // 开放侧：每个方向保留“距离密闭 root 最近”的点
+                        if (nodeInfo.DistanceToCenter < cluster.FarthestNode.DistanceToCenter)
+                        {
+                            cluster.FarthestNode = nodeInfo;
+                        }
+
+                        addedToCluster = true;
+                        break;
+                    }
+                }
+
+                if (!addedToCluster)
+                {
+                    clusters.Add(new NodeAngleCluster
+                    {
+                        ClusterIndex = clusters.Count,
+                        RepresentativeDirection = nodeInfo.Direction,
+                        Nodes = new List<NodeInfo3D> { nodeInfo },
+                        FarthestNode = nodeInfo
+                    });
+                }
+            }
+
+            List<BoundaryNodeInfo> boundaryNodes = new List<BoundaryNodeInfo>();
+
+            foreach (var cluster in clusters)
+            {
+                var selected = cluster.FarthestNode;
+
+                boundaryNodes.Add(new BoundaryNodeInfo
+                {
+                    Index = selected.Index,
+                    Position = selected.Position,
+                    Position3D = selected.Position3D,
+                    DistanceToCenter = selected.DistanceToCenter,
+                    Direction = selected.Direction,
+                    ClusterIndex = cluster.ClusterIndex
+                });
+            }
+
+            return boundaryNodes;
+        }
+       
         private point ConvertJointToPoint(Control control, joint j)
         {
             // 需要根据你的实际代码实现正运动学
@@ -700,6 +814,89 @@ namespace rrtRobot
 
             }
 
+        }
+        //用于非对称扩展时，开放一侧树的节点选择，是距离密闭侧根节点3D距离最近的节点中选取
+        private int Nearest_Node_FromClosestToReference3D(
+            Control control,
+            int openTreeState,
+            joint rand,
+            joint referenceRoot,
+            int topK = 18)
+        {
+            List<Node3D_joint> nodeList = openTreeState == 1 ? start_nodes : end_nodes;
+            if (nodeList.Count == 0)
+                return -1;
+
+            if (openSideCandidateVisual != null)
+            {
+                openSideCandidateVisual.Delete();
+                openSideCandidateVisual = null;
+            }
+
+            // 直接以“密闭侧 root”为参考中心做角度聚类
+            // 某些角度没有节点就保持为空，不做扇形补偿
+            List<BoundaryNodeInfo> boundaryNodes =
+                IdentifyBoundaryNodes_ByAngleClustering_FromReferenceRoot(
+                    control,
+                    openTreeState,
+                    referenceRoot,
+                    10.0);
+
+            if (boundaryNodes.Count == 0)
+                return -1;
+
+            point refPoint = ConvertJointToPoint(control, referenceRoot);
+
+            // 从角度聚类后的代表点中，取距离密闭 root 最近的前 topK 个
+            /*
+            List<BoundaryNodeInfo> candidates = boundaryNodes
+                .OrderBy(b =>
+                {
+                    double dx = b.Position3D.x - refPoint.x;
+                    double dy = b.Position3D.y - refPoint.y;
+                    double dz = b.Position3D.z - refPoint.z;
+                    return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                })
+                .Take(Math.Max(1, topK))
+                .ToList();
+            */
+            // 修改：不要只取 topK，改为使用所有聚类得到的边界点作为 candidates
+            // Change: use all boundary representatives as candidates instead of taking topK subset
+            List<BoundaryNodeInfo> candidates = boundaryNodes.ToList();
+            if (candidates.Count == 0)
+                return -1;
+
+            // 可视化：直接画这批开放侧候选
+            openSideCandidateVisual = TxRobotAPIClass.CreateResourcePathCurve(
+                openTreeState == 1 ? 0 : 1,
+                "OpenSideClosestCandidates");
+
+            TxColor color = openTreeState == 1
+                ? new TxColor(0, 255, 255)
+                : new TxColor(255, 255, 0);
+
+            foreach (BoundaryNodeInfo c in candidates)
+            {
+                TxRobotAPIClass.CreateSphereView(control, c.Position, robot, openSideCandidateVisual, color);
+            }
+
+            TxApplication.RefreshDisplay();
+
+            // 再从前 topK 个里选与 rand 在 joint 空间最近的点
+            double min = double.MaxValue;
+            int bestIndex = -1;
+
+            foreach (BoundaryNodeInfo c in candidates)
+            {
+                double d = dist(rand, c.Position);
+                if (d < min)
+                {
+                    min = d;
+                    bestIndex = c.Index;
+                }
+            }
+
+            return bestIndex;
         }
 
         public int Nearest_Node(int fromstart2end, Node3D_joint rand)
@@ -938,8 +1135,6 @@ namespace rrtRobot
                 {
 
                     // 打印出插补点；
-                    //LoginterPoljoints(InterpolJoints);
-                    //InterpolJoints.Clear();
                     return true;    // 本轮没有被微调，说明完整路径都 OK
 
                 }
@@ -1351,6 +1546,11 @@ namespace rrtRobot
                         x.Delete();
                     if (y != null)
                         y.Delete();
+                    if (openSideCandidateVisual != null)
+                    {
+                        openSideCandidateVisual.Delete();
+                        openSideCandidateVisual = null;
+                    }
                     return; //如果迭代次数超过10000次则退出
                 }
                 if (state == 1)
@@ -1368,11 +1568,29 @@ namespace rrtRobot
                          GetRandomDouble(start_nodes[0].loc.j6 - M_PI, start_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
 
-                    if (separatedAdaptiveSystem.startIsStagnant && IterationCounts%2==0)
+                    bool useSpecialSelection = (IterationCounts % 2 == 0);
+
+                    if (separatedAdaptiveSystem.startIsStagnant && useSpecialSelection)
                     {
+                        // 当前扩展侧 Start 自己是密闭侧：保持原逻辑
                         index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
                     }
-                    else index = Nearest_Node(1, rand_node);
+                    else if (separatedAdaptiveSystem.endIsStagnant && useSpecialSelection)
+                    {
+                        // 对侧 End 是密闭侧，则当前 Start 是开放侧：
+                        // 直接在选择函数内部完成候选计算和可视化
+                        index = Nearest_Node_FromClosestToReference3D(
+                            control,
+                            1,
+                            rand_node.loc,
+                            end_nodes[0].loc,
+                            10);
+                    }
+                    else
+                    {
+                        index = Nearest_Node(1, rand_node);
+                    }
+
                     int index_fromEndNodes = Nearest_Node(2, rand_node);
 
                     if (index_fromEndNodes < 0) index_fromEndNodes = 0;
@@ -1503,15 +1721,28 @@ namespace rrtRobot
                          GetRandomDouble(end_nodes[0].loc.j5 - M_PI / 2, end_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j6 - M_PI, end_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
+                    bool useSpecialSelection = (IterationCounts % 2 == 0);
 
-
-
-                    if (separatedAdaptiveSystem.endIsStagnant && IterationCounts % 2 == 0)
+                    if (separatedAdaptiveSystem.endIsStagnant && useSpecialSelection)
                     {
-                       index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
+                        // 当前扩展侧 End 自己是密闭侧：保持原逻辑
+                        index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
                     }
-
-                    else index = Nearest_Node(state, rand_node);
+                    else if (separatedAdaptiveSystem.startIsStagnant && useSpecialSelection)
+                    {
+                        // 对侧 Start 是密闭侧，则当前 End 是开放侧：
+                        // 直接在选择函数内部完成候选计算和可视化
+                        index = Nearest_Node_FromClosestToReference3D(
+                            control,
+                            2,
+                            rand_node.loc,
+                            start_nodes[0].loc,
+                            10);
+                    }
+                    else
+                    {
+                        index = Nearest_Node(state, rand_node);
+                    }
 
                     int index_fromEndNodes = Nearest_Node(1, rand_node);
                     if (index_fromEndNodes < 0) index_fromEndNodes = 0;
@@ -1638,6 +1869,11 @@ namespace rrtRobot
                 x.Delete();
             if (y != null)
                 y.Delete();
+            if (openSideCandidateVisual != null)
+            {
+                openSideCandidateVisual.Delete();
+                openSideCandidateVisual = null;
+            }
         }
         // 新增的方法：局部路径规划
         // 新增的方法：局部路径规划

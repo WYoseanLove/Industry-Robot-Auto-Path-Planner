@@ -100,7 +100,7 @@ namespace rrtRobot
             DateTime currentTime = DateTime.Now;
 
             // 设定目标时间为2025年3月31日下午4点
-            DateTime targetTime = new DateTime(2026, 4, 30, 8, 0, 0);
+            DateTime targetTime = new DateTime(2027, 4, 30, 8, 0, 0);
 
             // 比较当前时间与设定时间
             if (currentTime > targetTime)
