@@ -847,19 +847,6 @@ namespace rrtRobot
 
             point refPoint = ConvertJointToPoint(control, referenceRoot);
 
-            // 从角度聚类后的代表点中，取距离密闭 root 最近的前 topK 个
-            /*
-            List<BoundaryNodeInfo> candidates = boundaryNodes
-                .OrderBy(b =>
-                {
-                    double dx = b.Position3D.x - refPoint.x;
-                    double dy = b.Position3D.y - refPoint.y;
-                    double dz = b.Position3D.z - refPoint.z;
-                    return Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                })
-                .Take(Math.Max(1, topK))
-                .ToList();
-            */
             // 修改：不要只取 topK，改为使用所有聚类得到的边界点作为 candidates
             // Change: use all boundary representatives as candidates instead of taking topK subset
             List<BoundaryNodeInfo> candidates = boundaryNodes.ToList();
@@ -1179,10 +1166,11 @@ namespace rrtRobot
                         (double)pose.JointValues[5],
                         gun
                     );
-
+                    double gun_before = p.Sever_Gun;
                     if (!collisioncheckforSingleJoint(control, ref p))
                         return false;
-
+                    if(Math.Abs(p.Sever_Gun - gun_before) > 1e-3 ) return false;
+                   
 
                 }
             }
@@ -1540,7 +1528,7 @@ namespace rrtRobot
                 {
                     AppendPathEndNodesToStartTree(control);
                 }
-                if ((IterationCounts / threshold) == 12)
+                if ((IterationCounts / threshold) == 20)
                 {
                     if (x != null)
                         x.Delete();
@@ -1630,7 +1618,7 @@ namespace rrtRobot
                     if (isvalidcorss == false)
                     {
                         // 如果扩展失败，尝试使用局部路径规划
-                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index].loc, end_nodes[index_fromEndNodes].loc, true, obs, k_att, k_rep, start_step_size, 5, start_step_size / 2))
+                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index].loc, end_nodes[index_fromEndNodes].loc, true, obs, k_att, k_rep, start_step_size, 1, start_step_size / 2))
                         {
                             isvalidcorss = true;
                         }
@@ -1775,7 +1763,7 @@ namespace rrtRobot
                     bool isvalidcorss = isValid(control, step_node.loc, end_nodes[index].loc, false);
                     if (isvalidcorss == false)
                     {
-                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index_fromEndNodes].loc, end_nodes[index].loc, false, obs, k_att, k_rep, end_step_size, 5, end_step_size / 2))
+                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index_fromEndNodes].loc, end_nodes[index].loc, false, obs, k_att, k_rep, end_step_size, 1, end_step_size / 2))
                         {
                             isvalidcorss = true;
                         }
@@ -1877,16 +1865,54 @@ namespace rrtRobot
         }
         // 新增的方法：局部路径规划
         // 新增的方法：局部路径规划
-        public bool LocalPathPlanningWithAPF(Control control, ref joint current, joint p_start, joint p_goal, joint NearStartNodes, joint NearGoalNodes, bool fromstart2end, List<joint> obsList, double k_att, double k_rep, double influenceRadius, int maxIterations, double learningRate)
+        public bool LocalPathPlanningWithAPF(
+                    Control control,
+                    ref joint current,
+                    joint p_start,
+                    joint p_goal,
+                    joint NearStartNodes,
+                    joint NearGoalNodes,
+                    bool fromstart2end,
+                    List<joint> obsList,
+                    double k_att,
+                    double k_rep,
+                    double influenceRadius,
+                    int maxIterations,
+                    double learningRate)
         {
             for (int iteration = 0; iteration < maxIterations; iteration++)
             {
-                if (fromstart2end) //表示从start向end去扩展
-                {
-                    // 计算当前位置的势场梯度  
-                    double[] gradient = ApfCalculateMethod(control, current, NearGoalNodes, p_goal, learningRate, obsList, k_att, k_rep, influenceRadius);
+                bool isDenseSide =
+                    separatedAdaptiveSystem != null &&
+                    (fromstart2end
+                        ? separatedAdaptiveSystem.startIsStagnant||(separatedAdaptiveSystem.startEnvironmentState == "Extremely Dense Obstacles")
+                        : separatedAdaptiveSystem.endIsStagnant || (separatedAdaptiveSystem.endEnvironmentState == "Extremely Dense Obstacles"));
 
-                    // 沿着梯度方向调整位置
+                if (fromstart2end) // 表示从 start 向 end 扩展
+                {
+                    double[] gradient = ApfCalculateMethod(
+                        control,
+                        current,
+                        NearGoalNodes,
+                        p_goal,
+                        learningRate,
+                        obsList,
+                        k_att,
+                        k_rep,
+                        influenceRadius);
+
+                    // 若当前扩展侧处于密闭空间，则提升前 3 个轴的权重
+                    if (isDenseSide)
+                    {
+                        double axisWeight = 1.5 + (rd != null ? rd.NextDouble() : new Random().NextDouble());
+                        gradient[0] *= axisWeight;
+                        gradient[1] *= axisWeight;
+                        gradient[2] *= axisWeight;
+
+                        // 重新归一化，保持“方向偏置”而不是单纯放大步长
+                        gradient = Normalize(gradient);
+                    }
+
                     current.j1 += learningRate * gradient[0];
                     current.j2 += learningRate * gradient[1];
                     current.j3 += learningRate * gradient[2];
@@ -1894,18 +1920,36 @@ namespace rrtRobot
                     current.j5 += learningRate * gradient[4];
                     current.j6 += learningRate * gradient[5];
 
-                    // 检查调整后的新位置是否有效
                     if (isValid(control, current, NearStartNodes, true))
                     {
-                        return true; // 找到有效路径
+                        return true;
                     }
                 }
-                else
+                else // 表示从 end 向 start 扩展
                 {
-                    // 计算当前位置的势场梯度  
-                    double[] gradient = ApfCalculateMethod(control, current, NearStartNodes, p_start, learningRate, obsList, k_att, k_rep, influenceRadius);
+                    double[] gradient = ApfCalculateMethod(
+                        control,
+                        current,
+                        NearStartNodes,
+                        p_start,
+                        learningRate,
+                        obsList,
+                        k_att,
+                        k_rep,
+                        influenceRadius);
 
-                    // 沿着梯度方向调整位置
+                    // 若当前扩展侧处于密闭空间，则提升前 3 个轴的权重
+                    if (isDenseSide)
+                    {
+                        double axisWeight = 1.5 + (rd != null ? rd.NextDouble() : new Random().NextDouble());
+                        gradient[0] *= axisWeight;
+                        gradient[1] *= axisWeight;
+                        gradient[2] *= axisWeight;
+
+                        // 重新归一化，保持“方向偏置”而不是单纯放大步长
+                        gradient = Normalize(gradient);
+                    }
+
                     current.j1 += learningRate * gradient[0];
                     current.j2 += learningRate * gradient[1];
                     current.j3 += learningRate * gradient[2];
@@ -1913,21 +1957,14 @@ namespace rrtRobot
                     current.j5 += learningRate * gradient[4];
                     current.j6 += learningRate * gradient[5];
 
-                    // 检查调整后的新位置是否有效
                     if (isValid(control, current, NearGoalNodes, false))
                     {
-                        return true; // 找到有效路径
+                        return true;
                     }
-
-
-
                 }
-
-
             }
 
-
-            return false; // 未能找到有效路径
+            return false;
         }
 
         // 带rcs的插补算法
