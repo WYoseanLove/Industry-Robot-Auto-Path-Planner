@@ -1618,7 +1618,7 @@ namespace rrtRobot
                     if (isvalidcorss == false)
                     {
                         // 如果扩展失败，尝试使用局部路径规划
-                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index].loc, end_nodes[index_fromEndNodes].loc, true, obs, k_att, k_rep, start_step_size, 1, start_step_size / 2))
+                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index].loc, end_nodes[index_fromEndNodes].loc, true, obs, k_att, k_rep, start_step_size, 5, start_step_size / 2))
                         {
                             isvalidcorss = true;
                         }
@@ -1763,7 +1763,7 @@ namespace rrtRobot
                     bool isvalidcorss = isValid(control, step_node.loc, end_nodes[index].loc, false);
                     if (isvalidcorss == false)
                     {
-                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index_fromEndNodes].loc, end_nodes[index].loc, false, obs, k_att, k_rep, end_step_size, 1, end_step_size / 2))
+                        if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index_fromEndNodes].loc, end_nodes[index].loc, false, obs, k_att, k_rep, end_step_size, 5, end_step_size / 2))
                         {
                             isvalidcorss = true;
                         }
@@ -1882,12 +1882,7 @@ namespace rrtRobot
         {
             for (int iteration = 0; iteration < maxIterations; iteration++)
             {
-                bool isDenseSide =
-                    separatedAdaptiveSystem != null &&
-                    (fromstart2end
-                        ? separatedAdaptiveSystem.startIsStagnant||(separatedAdaptiveSystem.startEnvironmentState == "Extremely Dense Obstacles")
-                        : separatedAdaptiveSystem.endIsStagnant || (separatedAdaptiveSystem.endEnvironmentState == "Extremely Dense Obstacles"));
-
+               
                 if (fromstart2end) // 表示从 start 向 end 扩展
                 {
                     double[] gradient = ApfCalculateMethod(
@@ -1901,17 +1896,7 @@ namespace rrtRobot
                         k_rep,
                         influenceRadius);
 
-                    // 若当前扩展侧处于密闭空间，则提升前 3 个轴的权重
-                    if (isDenseSide)
-                    {
-                        double axisWeight = 1.5 + (rd != null ? rd.NextDouble() : new Random().NextDouble());
-                        gradient[0] *= axisWeight;
-                        gradient[1] *= axisWeight;
-                        gradient[2] *= axisWeight;
-
-                        // 重新归一化，保持“方向偏置”而不是单纯放大步长
-                        gradient = Normalize(gradient);
-                    }
+                    
 
                     current.j1 += learningRate * gradient[0];
                     current.j2 += learningRate * gradient[1];
@@ -1938,17 +1923,7 @@ namespace rrtRobot
                         k_rep,
                         influenceRadius);
 
-                    // 若当前扩展侧处于密闭空间，则提升前 3 个轴的权重
-                    if (isDenseSide)
-                    {
-                        double axisWeight = 1.5 + (rd != null ? rd.NextDouble() : new Random().NextDouble());
-                        gradient[0] *= axisWeight;
-                        gradient[1] *= axisWeight;
-                        gradient[2] *= axisWeight;
-
-                        // 重新归一化，保持“方向偏置”而不是单纯放大步长
-                        gradient = Normalize(gradient);
-                    }
+                  
 
                     current.j1 += learningRate * gradient[0];
                     current.j2 += learningRate * gradient[1];
