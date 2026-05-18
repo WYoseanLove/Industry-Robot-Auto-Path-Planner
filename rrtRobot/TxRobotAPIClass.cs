@@ -141,6 +141,57 @@ namespace rrtRobot
 
             }
         }
+        // 输出碰撞点的坐标；
+        public static TxVector Collision_CheckPoint(Control control, TxCollisionPairCreationData cd, TxCollisionQueryParams queryParams, TxCollisionRoot root, TxObjectList collisionSrc, TxObjectList collisionTar, double Clearance)
+        {
+            if (control.InvokeRequired)
+            {
+                // Use Invoke to call this method on the UI thread
+                return (TxVector)control.Invoke(new Func<Control, TxCollisionPairCreationData, TxCollisionQueryParams, TxCollisionRoot, TxObjectList, TxObjectList, double, TxVector>(
+                    Collision_CheckPoint), control, cd, queryParams, root, collisionSrc, collisionTar, Clearance);
+            }
+            else
+            {
+                queryParams.Mode = TxCollisionQueryParams.TxCollisionQueryMode.DefinedPairs;
+                queryParams.NearMissDistance = Clearance;
+
+                using (TxCollisionQueryResults results = root.GetCollidingObjects(queryParams))
+                {
+                    if (results.States.Count == 0)
+                    {
+                        results.States.Clear();
+                        cd.Dispose();
+                        return new TxVector(0, 0, 0);
+                    }
+
+                    for (int i = 0; i < results.States.Count; i++)
+                    {
+                        if ((results.States[i] as TxCollisionState).Type == TxCollisionState.TxCollisionStateType.Collision)
+                        {
+                            //results.States.Clear();
+                            // cd.Dispose();
+                            double clearance = 0;
+                            TxVector pointOnTool = new TxVector();
+                            TxVector pointOnCollison = new TxVector();
+
+                            ((results.States[i] as TxCollisionState).FirstObject as ITxLocatableObject).GetMinimalDistance(
+
+                                ((results.States[i] as TxCollisionState).SecondObject as ITxLocatableObject)
+                                , out clearance, out pointOnTool, out pointOnCollison
+
+                                );
+                            return pointOnTool;
+                        }
+                    }
+                    return new TxVector(0, 0, 0);
+
+                }
+
+
+
+            }
+
+        }
 
         public static void DisposeTxposureData(ArrayList Solutions)
         {

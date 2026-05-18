@@ -139,28 +139,22 @@ namespace rrtRobot
         {
             //对对话框控件的字体进行修改，在WPF中修改的字体无法在Tecnomatix中显示；
             m_pathGenerate.Enabled = false;
+            
             m_pathGenerate.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             button1.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             label3.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            label4.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            label6.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 
             m_spotDirec.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             Collision_Src.Font = new System.Drawing.Font("Microsoft Sans Serif", 12);
-            groupBox2.Size = new System.Drawing.Size(495, 103);
-            Group_Collision.Size = new System.Drawing.Size(495, 103);
-            groupBox1.Size = new System.Drawing.Size(495, 293);
-
-            this.Size = new System.Drawing.Size(547, 679);
             this.FormBorderStyle = FormBorderStyle.Fixed3D;
-            collisionSrc = new TxObjectList();
-            button1.Location = new System.Drawing.Point(172, 562);
-            button1.Size = new System.Drawing.Size(153, 35);
-            m_pathGenerate.Location = new System.Drawing.Point(343, 562);
-            m_pathGenerate.Size = new System.Drawing.Size(143, 35);
+            this.StartPosition = FormStartPosition.CenterParent;
             m_collisionListPick.Enabled = false;
             button1.Enabled = false;
-
+            collisionSrc = new TxObjectList();
         }
 
         private void txTargetGroupOpEditBoxCtrl_Picked(object sender, TxObjEditBoxCtrl_PickedEventArgs args)
@@ -475,102 +469,7 @@ namespace rrtRobot
 
             return random.NextDouble() * (maxValue - minValue) + minValue;
         }
-        private bool getptpPassthroughPoints(joint p_start, joint p_end, ref point passPoint, out TxPoseData robotPosture)
-        {
-            List<double> jointschange = TxRobotptpPathCal.calculateJointsChange(p_start, p_end, robot);
-            double servoGunjointChange = TxRobotptpPathCal.calculateServoGunJointChange(p_start, p_end, robot);
-            (double value, int index) result = TxRobotptpPathCal.FindLargestAbsoluteWithIndex(jointschange);
-
-            double ptpTime = TxRobotptpPathCal.calculatePTPtime(mainTxControl, jointschange, robot);
-            double ServoGunTime = TxRobotptpPathCal.calculateServoPTPtime(servoGunjointChange, robServerGun);
-
-
-            if (ptpTime <= ServoGunTime)
-                ptpTime = ServoGunTime;
-
-            int jointDiv = (int)Math.Abs((result.value / M_PI) * 180);
-
-            int i = jointDiv / 2;
-
-            TxPoseData robotcurrentPosedata = TxRobotptpPathCal.calCurrentRobotPosedata(mainTxControl, p_start, p_end, robot, (ptpTime / jointDiv) * (i + 1), ptpTime);
-
-            //double Gun_open = p_start.Sever_Gun + (p_end.Sever_Gun - p_start.Sever_Gun) * (i + 1) / jointDiv;
-            double Gun_open = TxRobotptpPathCal.calCurrentServoGunJointData(ptpTime, (ptpTime / jointDiv) * (i + 1), robServerGun, servoGunjointChange, p_start.Sever_Gun);
-
-            joint p = new joint((double)robotcurrentPosedata.JointValues[0],
-                (double)robotcurrentPosedata.JointValues[1],
-                (double)robotcurrentPosedata.JointValues[2],
-                (double)robotcurrentPosedata.JointValues[3],
-                (double)robotcurrentPosedata.JointValues[4],
-                (double)robotcurrentPosedata.JointValues[5],
-                Gun_open);
-
-
-
-            int count = 0;
-
-            double step = M_PI / 180;
-
-            int step_count = 1;
-
-            joint q = p;
-            robotPosture = new TxPoseData();
-            while (!TxRobotRRTConnectJoint.collisioncheckforSingleJoint(mainTxControl, ref q))
-            {
-
-                q.j1 = GetRandomDouble(p.j1 - step_count * step * 2, p.j1 + step_count * step * 2, robot.Joints[0].LowerSoftLimit, robot.Joints[0].UpperSoftLimit);
-                q.j2 = GetRandomDouble(p.j2 - step_count * step * 4, p.j2 + step_count * step * 4, robot.Joints[1].LowerSoftLimit, robot.Joints[1].UpperSoftLimit);
-                q.j3 = GetRandomDouble(p.j3 - step_count * step * 4, p.j3 + step_count * step * 4, robot.Joints[2].LowerSoftLimit, robot.Joints[2].UpperSoftLimit);
-                q.j4 = GetRandomDouble(p.j4 - step_count * step * 5, p.j4 + step_count * step * 5, robot.Joints[3].LowerSoftLimit, robot.Joints[3].UpperSoftLimit);
-                q.j5 = GetRandomDouble(p.j5 - step_count * step * 4, p.j5 + step_count * step * 4, robot.Joints[4].LowerSoftLimit, robot.Joints[4].UpperSoftLimit);
-
-                q.j6 = GetRandomDouble(p.j6 - step_count * step * 10, p.j6 + step_count * step * 10, robot.Joints[5].LowerSoftLimit, robot.Joints[5].UpperSoftLimit);
-
-                count++;
-                if (count % 500 == 0)
-                {
-                    step_count++;
-
-                }
-
-
-                if (count > 5000)
-                {
-
-                    TxRobotRRTConnectJoint.LograndNodeInformation(passPoint, "bybass Point not calculated out and add failed: ");
-                    return false;
-                }
-
-            }
-
-
-            ArrayList robJointValue = new ArrayList();
-
-            for (i = 0; i < q.ToArray().Length; i++)
-            {
-                robJointValue.Add(q.ToArray()[i]);
-
-            }
-
-            robotPosture.JointValues = robJointValue;
-
-            robot.CurrentPose = robotPosture;
-
-            passPoint = new point(
-
-                robot.TCPF.AbsoluteLocation.Translation.X,
-                robot.TCPF.AbsoluteLocation.Translation.Y,
-                robot.TCPF.AbsoluteLocation.Translation.Z,
-                robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
-                robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
-                robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
-                p.Sever_Gun
-
-                );
-
-            TxRobotRRTConnectJoint.LograndNodeInformation(passPoint, "bybass Point added: ");
-            return true;
-        }
+       
         private TxRoboticCompositeCommandStringElement CreateOLPCommandElement(string command, TxRoboticViaLocationOperation location)
         {
 

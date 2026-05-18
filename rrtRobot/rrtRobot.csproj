@@ -71,6 +71,7 @@
     <Compile Include="TxrrtRobotPathPlannerForm.Designer.cs">
       <DependentUpon>TxrrtRobotPathPlannerForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="TxStagnationRotationEscapePlanner.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="StringTable.resx">

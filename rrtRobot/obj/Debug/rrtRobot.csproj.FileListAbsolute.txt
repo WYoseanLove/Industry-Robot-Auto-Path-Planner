@@ -65,3 +65,12 @@ C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.cspr
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.csproj.CoreCompileInputs.cache
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.dll
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.pdb
+E:\code\source\repos\MulrrtRobot\rrtRobot\bin\Debug\rrtRobot.dll
+E:\code\source\repos\MulrrtRobot\rrtRobot\bin\Debug\rrtRobot.pdb
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.csproj.AssemblyReference.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.StringTable.resources
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.TxrrtRobotPathPlannerForm.resources
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.csproj.GenerateResource.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.csproj.CoreCompileInputs.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.dll
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Debug\rrtRobot.pdb

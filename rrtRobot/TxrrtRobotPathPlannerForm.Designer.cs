@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.Windows.Forms.VisualStyles;
 using Tecnomatix.Engineering;
 using Tecnomatix.Engineering.Ui;
@@ -176,7 +177,7 @@ namespace rrtRobot
             // TxrrtRobotPathPlannerForm
             // 
             resources.ApplyResources(this, "$this");
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.m_pathGenerate);
