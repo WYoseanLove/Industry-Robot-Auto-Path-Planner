@@ -450,17 +450,9 @@ namespace rrtRobot
         public double j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit;
         // === 智能采样和分离式自适应系统相关成员变量 ===
         public static SeparatedAdaptiveSystem separatedAdaptiveSystem;
+        // === 机器学习/经验学习出口吸引点系统 ===
+        private EscapeOutletAttractorLearner outletLearner = new EscapeOutletAttractorLearner();
         private JointLimitBox outletJointLimits;
-        // === 旋转扫描密闭空间逃逸规划器 ===
-        private TxStagnationRotationEscapePlanner stagnationRotationEscapePlanner;
-        private StagnationRotationEscapeResult startEscapeCache;
-        private StagnationRotationEscapeResult endEscapeCache;
-        private bool startEscapeDisabled = false;
-        private bool endEscapeDisabled = false;
-        private int startEscapeRound = 0;
-        private int endEscapeRound = 0;
-        private const double SecondEscapeRandJitterScale = 2;
-
         // === 出口吸引点连接线可视化 ===
         private TxComponent outletConnectionVisualStart;
         private TxComponent outletConnectionVisualEnd;
@@ -472,6 +464,20 @@ namespace rrtRobot
             sw.Close();
 
         }
+        public static void LograndNodeInformation(point p, string information)
+        {
+            StreamWriter sw = new StreamWriter(TxrrtRobotPathPlannerForm.LogfilePath, true);
+
+            sw.WriteLine(DateTime.Now.ToLocalTime().ToString() + " " + information + ": " + p.x.ToString() + " "
+           + p.y.ToString() + " "
+           + p.z.ToString() + " "
+           + (p.rx * 180 / M_PI).ToString() + " "
+           + (p.ry * 180 / M_PI).ToString() + " "
+           + (p.rz * 180 / M_PI).ToString() + " "
+           + (p.Gun_Open).ToString() + " ");
+
+            sw.Close();
+        }
         public double dist(joint p1, joint p2)  // To calculate the distance between two points
         {
 
@@ -479,268 +485,6 @@ namespace rrtRobot
                 + Math.Pow(p2.j4 - p1.j4, 2) + Math.Pow(p2.j5 - p1.j5, 2) + Math.Pow(p2.j6 - p1.j6, 2));
 
         }
-        private bool TryGetStagnationEscapeRand(
-             Control control,
-             bool useStartTree,
-             out StagnationRotationEscapeResult escapeResult)
-        {
-            escapeResult = null;
-
-            List<Node3D_joint> treeNodes = useStartTree ? start_nodes : end_nodes;
-            if (treeNodes == null || treeNodes.Count == 0)
-            {
-                return false;
-            }
-
-            if (stagnationRotationEscapePlanner == null)
-            {
-                stagnationRotationEscapePlanner =
-                    new TxStagnationRotationEscapePlanner(outletJointLimits);
-            }
-            else
-            {
-                stagnationRotationEscapePlanner.UpdateJointLimits(outletJointLimits);
-            }
-
-            bool escapeDisabled = useStartTree ? startEscapeDisabled : endEscapeDisabled;
-            if (escapeDisabled)
-            {
-                escapeResult = new StagnationRotationEscapeResult
-                {
-                    Success = false,
-                    UseFallbackRandom = true,
-                    Reason = "Escape mode already disabled. Use fallback random.",
-                    FallbackRandomJoint = stagnationRotationEscapePlanner.CreateFallbackRandomJoint(treeNodes[0].loc)
-                };
-
-                return true;
-            }
-
-            StagnationRotationEscapeResult cachedResult =
-                useStartTree ? startEscapeCache : endEscapeCache;
-
-            int escapeRound = useStartTree ? startEscapeRound : endEscapeRound;
-            double baseRandJitterDeg = stagnationRotationEscapePlanner.RandJitterDeg;
-
-            // ============================================================
-            // 第一次 escape：
-            // 直接以树根节点作为根点，生成第一个 escape point
-            // ============================================================
-            if (cachedResult == null || !cachedResult.Success)
-            {
-                joint rootJoint = treeNodes[0].loc;
-                double stepSize = useStartTree ? start_step_size : end_step_size;
-
-                stagnationRotationEscapePlanner.RandJitterDeg = baseRandJitterDeg;
-
-                escapeResult =
-                    stagnationRotationEscapePlanner.GenerateEscapeRand(
-                        control,
-                        rootJoint,
-                        treeNodes,
-                        stepSize);
-
-                stagnationRotationEscapePlanner.RandJitterDeg = baseRandJitterDeg;
-
-                if (escapeResult == null)
-                {
-                    return false;
-                }
-
-                if (escapeResult.Success)
-                {
-                    if (useStartTree)
-                    {
-                        startEscapeCache = escapeResult;
-                        startEscapeRound = 1;
-                    }
-                    else
-                    {
-                        endEscapeCache = escapeResult;
-                        endEscapeRound = 1;
-                    }
-                }
-                else
-                {
-                    if (useStartTree)
-                    {
-                        startEscapeCache = null;
-                        startEscapeRound = 0;
-                    }
-                    else
-                    {
-                        endEscapeCache = null;
-                        endEscapeRound = 0;
-                    }
-                }
-
-                return true;
-            }
-
-            // ============================================================
-            // 已有 escape cache 时，先按当前轮次生成 rand
-            // Round 1: 用基础 RandJitterDeg
-            // Round 2: 用 10 倍 RandJitterDeg
-            // ============================================================
-            double activeRandJitterDeg =
-                escapeRound >= 2
-                    ? baseRandJitterDeg * SecondEscapeRandJitterScale
-                    : baseRandJitterDeg;
-
-            stagnationRotationEscapePlanner.RandJitterDeg = activeRandJitterDeg;
-
-            joint randJoint;
-            if (!stagnationRotationEscapePlanner.TryGenerateRandFromEscapeJoint(
-                control,
-                cachedResult.EscapeJoint,
-                out randJoint))
-            {
-                randJoint = cachedResult.EscapeJoint;
-            }
-
-            stagnationRotationEscapePlanner.RandJitterDeg = baseRandJitterDeg;
-
-            cachedResult.RandJoint = randJoint;
-
-            // ============================================================
-            // NeedRefreshEscapePoint 逻辑不变：
-            // 只不过第二轮时 cachedResult 内的 AnchorPoint / EscapePoint
-            // 已经是第二轮重新计算后的那一组。
-            // ============================================================
-            bool needNextEscape =
-                stagnationRotationEscapePlanner.NeedRefreshEscapePoint(
-                    control,
-                    cachedResult,
-                    treeNodes);
-
-            // 当前轮次还未进入第二轮，则触发第二轮 escape
-            if (needNextEscape && escapeRound == 1)
-            {
-                int nearestIndex = Nearest_Node_By3DPoint(
-                    control,
-                    useStartTree,
-                    cachedResult.EscapePoint);
-
-                joint rootJoint = nearestIndex >= 0
-                    ? treeNodes[nearestIndex].loc
-                    : treeNodes[0].loc;
-
-                double stepSize = useStartTree ? start_step_size : end_step_size;
-
-                stagnationRotationEscapePlanner.RandJitterDeg =
-                    baseRandJitterDeg * SecondEscapeRandJitterScale;
-
-                escapeResult =
-                    stagnationRotationEscapePlanner.GenerateEscapeRand(
-                        control,
-                        rootJoint,
-                        treeNodes,
-                        stepSize);
-
-                stagnationRotationEscapePlanner.RandJitterDeg = baseRandJitterDeg;
-
-                if (escapeResult == null)
-                {
-                    return false;
-                }
-
-                if (escapeResult.Success)
-                {
-                    if (useStartTree)
-                    {
-                        startEscapeCache = escapeResult;
-                        startEscapeRound = 2;
-                    }
-                    else
-                    {
-                        endEscapeCache = escapeResult;
-                        endEscapeRound = 2;
-                    }
-                }
-                else
-                {
-                    if (useStartTree)
-                    {
-                        startEscapeCache = null;
-                        startEscapeRound = 0;
-                    }
-                    else
-                    {
-                        endEscapeCache = null;
-                        endEscapeRound = 0;
-                    }
-                }
-
-                return true;
-            }
-
-            // 第二轮之后再次触发 needNextEscape，则直接退出 escape mode
-            if (needNextEscape && escapeRound >= 2)
-            {
-                if (useStartTree)
-                {
-                    startEscapeCache = null;
-                    startEscapeDisabled = true;
-                }
-                else
-                {
-                    endEscapeCache = null;
-                    endEscapeDisabled = true;
-                }
-
-                escapeResult = new StagnationRotationEscapeResult
-                {
-                    Success = false,
-                    UseFallbackRandom = true,
-                    Reason = "Escape round 2 finished and passed escape point. Exit escape mode and use fallback random.",
-                    FallbackRandomJoint = stagnationRotationEscapePlanner.CreateFallbackRandomJoint(treeNodes[0].loc)
-                };
-
-
-                return true;
-            }
-
-            // 继续沿当前轮次复用 escape point
-            escapeResult = cachedResult;
-            escapeResult.UseFallbackRandom = false;
-            escapeResult.Reason =
-                escapeRound >= 2
-                    ? "Reuse round 2 escape point and generate rand by enlarged jitter."
-                    : "Reuse round 1 escape point and generate rand by default jitter.";
-
-            return true;
-        }
-
-    
-        private point ConvertJointToPoint(Control control, joint j)
-        {
-            // 需要根据你的实际代码实现正运动学
-            // 示例：
-
-            using (var robotPosture = new TxPoseData())
-            {
-
-                var arr = new ArrayList(j.ToArray());
-                robotPosture.JointValues = arr;
-
-                var sols = new ArrayList { robotPosture };
-                TxRobotAPIClass.TxRobotPostureGenerate(
-                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, j.Sever_Gun);
-
-                point p = new point(
-                      robot.TCPF.AbsoluteLocation.Translation.X,
-                      robot.TCPF.AbsoluteLocation.Translation.Y,
-                      robot.TCPF.AbsoluteLocation.Translation.Z,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
-                    j.Sever_Gun);
-                return p;
-
-            }
-
-        }
-
         public int Nearest_Node(int fromstart2end, Node3D_joint rand)
         {
             double min = 999.0;
@@ -783,39 +527,6 @@ namespace rrtRobot
             return index;
         }
 
-        private int Nearest_Node_By3DPoint(
-            Control control,
-            bool useStartTree,
-            point targetPoint)
-        {
-            List<Node3D_joint> nodeList = useStartTree ? start_nodes : end_nodes;
-
-            if (nodeList == null || nodeList.Count == 0)
-            {
-                return -1;
-            }
-
-            double minDistance = double.MaxValue;
-            int bestIndex = -1;
-
-            for (int i = 0; i < nodeList.Count; i++)
-            {
-                point nodePoint = ConvertJointToPoint(control, nodeList[i].loc);
-
-                double dx = nodePoint.x - targetPoint.x;
-                double dy = nodePoint.y - targetPoint.y;
-                double dz = nodePoint.z - targetPoint.z;
-                double distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-
-                if (distance < minDistance)
-                {
-                    minDistance = distance;
-                    bestIndex = i;
-                }
-            }
-
-            return bestIndex;
-        }
         public joint step_func(joint near, joint rand, double size_step)
         {
             double j1 = rand.j1 - near.j1;
@@ -1299,24 +1010,16 @@ namespace rrtRobot
             // 初始化智能采样和分离式自适应系统
 
             separatedAdaptiveSystem = new SeparatedAdaptiveSystem();
-            startEscapeCache = null;
-            endEscapeCache = null;
-            startEscapeDisabled = false;
-            endEscapeDisabled = false;
-            startEscapeRound = 0;
-            endEscapeRound = 0;
-            // 初始化关节限位
-            outletJointLimits = new JointLimitBox(
-                j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit,
-                j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit);
-            // 初始化关节限位
-            outletJointLimits = new JointLimitBox(
-                j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit,
-                j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit);
+            // 初始化出口吸引点学习器
+            if (outletLearner == null)
+            {
+                outletLearner = new EscapeOutletAttractorLearner();
+            }
 
-            // 初始化旋转扫描密闭空间逃逸规划器
-            stagnationRotationEscapePlanner =
-                new TxStagnationRotationEscapePlanner(outletJointLimits);
+            // 初始化关节限位
+            outletJointLimits = new JointLimitBox(
+                j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit,
+                j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit);
 
             connected = 0;
             state = 1;
@@ -1324,8 +1027,6 @@ namespace rrtRobot
             nodecount_start = 0;
             nodecount_end = 0;
             IterationCounts = 0;
-            startEscapeCache = null;
-            endEscapeCache = null;
 
             Node3D_joint start_node = new Node3D_joint();
             Node3D_joint end_node = new Node3D_joint();
@@ -1426,7 +1127,7 @@ namespace rrtRobot
                 {
                     AppendPathEndNodesToStartTree(control);
                 }
-                if ((IterationCounts / threshold) == 20)
+                if ((IterationCounts / threshold) == 12)
                 {
                     if (x != null)
                         x.Delete();
@@ -1454,8 +1155,8 @@ namespace rrtRobot
 
                     double rand_node_gun_open = 0;
 
-                    rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
-
+                    //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    rand_node_gun_open = ToolJointOpening;
                     rand_node.loc = new joint(GetRandomDouble(start_nodes[0].loc.j1 - M_PI / 2, start_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j2 - M_PI / 2, start_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j3 - M_PI / 2, start_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1466,36 +1167,39 @@ namespace rrtRobot
 
                     bool useSpecialSelection = (IterationCounts % 2 == 0);
 
-                    // 只处理当前起点树自身的停滞
+                    // ============================================================
+                    // 起点树停滞：用出口吸引点替代 rand_node.loc
+                    // 这个吸引点像随机点一样，用于决定哪个 start_nodes 节点被选中扩展
+                    // ============================================================
                     if (separatedAdaptiveSystem.startIsStagnant && useSpecialSelection)
                     {
-                        StagnationRotationEscapeResult escapeResult = null;
+                        int otherTreeIndex = Nearest_Node(2, start_nodes[0]);
+                        if (otherTreeIndex < 0) otherTreeIndex = 0;
+                        OutletAttractorResult outletResult =
+                            outletLearner.PredictOutletAttractor(
+                                start_nodes,              // 当前正在扩展的树
+                                p_end,                    // 当前树的目标
+                                end_nodes[otherTreeIndex].loc,       // 对侧树参考点
+                                obs,                      // 障碍/碰撞点
+                                start_step_size,          // 当前步长
+                                true,                     // 当前是起点树
+                                outletJointLimits);       // 关节限位
 
-                        //index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
+                        if (outletResult != null && outletResult.Success)
+                        {
+                            rand_node.loc = outletResult.RandLikeAttractor;
+
+                        }
+
+                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
                         index = Nearest_Node(1, rand_node);
 
-                        if (TryGetStagnationEscapeRand(control, true, out escapeResult) &&  (escapeResult != null) && escapeResult.Success) 
-                            rand_node.loc = escapeResult.RandJoint;
-  
-                        if (index < 0)
-                        {
-                            index = Nearest_Node(1, rand_node);
-                        }
-
-                        if (escapeResult != null && escapeResult.Success && index >= 0)
-                        {
-                            VisualizeCurrentNodeToEscapePoint(
-                                control,
-                                escapeResult,
-                                start_nodes,
-                                index,
-                                true);
-                        }
                     }
                     else
                     {
                         index = Nearest_Node(1, rand_node);
                     }
+
                     int index_fromEndNodes = Nearest_Node(2, rand_node);
 
                     if (index_fromEndNodes < 0)
@@ -1628,7 +1332,8 @@ namespace rrtRobot
 
                     double rand_node_gun_open = 0;
 
-                    rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    rand_node_gun_open = ToolJointOpening;
                     rand_node.loc = new joint(GetRandomDouble(end_nodes[0].loc.j1 - M_PI / 2, end_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j2 - M_PI / 2, end_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j3 - M_PI / 2, end_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1638,34 +1343,40 @@ namespace rrtRobot
                          rand_node_gun_open);
                     bool useSpecialSelection = (IterationCounts % 2 == 0);
 
-                    // 只处理当前终点树自身的停滞
+                    // ============================================================
+                    // 终点树停滞：用出口吸引点替代 rand_node.loc
+                    // 这个吸引点像随机点一样，用于决定哪个 end_nodes 节点被选中扩展
+                    // ============================================================
                     if (separatedAdaptiveSystem.endIsStagnant && useSpecialSelection)
                     {
-                        StagnationRotationEscapeResult escapeResult = null;
-                        // index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
-                        index = Nearest_Node(2, rand_node);
-                        if (TryGetStagnationEscapeRand(control, false, out escapeResult) && (escapeResult != null)&& escapeResult.Success)
-                            rand_node.loc = escapeResult.RandJoint;
-                     
-                        if (index < 0)
+                        //joint otherTreeReference = start_nodes.Count > 0 ? start_nodes[0].loc : p_start;
+                        int otherTreeIndex = Nearest_Node(1, end_nodes[0]);
+                        if (otherTreeIndex < 0) otherTreeIndex = 0;
+                        OutletAttractorResult outletResult =
+                            outletLearner.PredictOutletAttractor(
+                                end_nodes,                // 当前正在扩展的树
+                                p_start,                  // 终点树反向扩展时目标是起点
+                                start_nodes[otherTreeIndex].loc,       // 对侧树参考点
+                                obs,                      // 障碍/碰撞点
+                                end_step_size,            // 当前步长
+                                false,                    // 当前不是起点树
+                                outletJointLimits);       // 关节限位
+
+                        if (outletResult != null && outletResult.Success)
                         {
-                            index = Nearest_Node(2, rand_node);
+                            rand_node.loc = outletResult.RandLikeAttractor;
+
                         }
 
-                        if (escapeResult != null && escapeResult.Success && index >= 0)
-                        {
-                            VisualizeCurrentNodeToEscapePoint(
-                                control,
-                                escapeResult,
-                                end_nodes,
-                                index,
-                                false);
-                        }
+                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
+                        index = Nearest_Node(2, rand_node);
+                  
                     }
                     else
                     {
-                        index = Nearest_Node(2, rand_node);
+                        index = Nearest_Node(state, rand_node);
                     }
+
                     int index_fromEndNodes = Nearest_Node(1, rand_node);
 
                     if (index_fromEndNodes < 0)
@@ -1815,7 +1526,6 @@ namespace rrtRobot
                 outletConnectionVisualEnd = null;
             }
         }
-        // 新增的方法：局部路径规划
         // 新增的方法：局部路径规划
         public bool LocalPathPlanningWithAPF(Control control, ref joint current, joint p_start, joint p_goal, joint NearStartNodes, joint NearGoalNodes, bool fromstart2end, List<joint> obsList, double k_att, double k_rep, double influenceRadius, int maxIterations, double learningRate)
         {
@@ -2189,108 +1899,6 @@ namespace rrtRobot
 
 
 
-        }
-
-        /// <summary>
-        /// 可视化当前树中“最近 node”到“出口点 EscapeJoint”的连线。
-        /// 红色：最近 node
-        /// 蓝色：出口点
-        /// 黄色：连线
-        /// </summary>
-        private void VisualizeCurrentNodeToEscapePoint(
-                Control control,
-                StagnationRotationEscapeResult escapeResult,
-                List<Node3D_joint> treeNodes,
-                int index,
-                bool isStartTree)
-        {
-            if (escapeResult == null || !escapeResult.Success)
-            {
-                return;
-            }
-
-            if (treeNodes == null || index < 0 || index >= treeNodes.Count)
-            {
-                return;
-            }
-
-            try
-            {
-                if (isStartTree)
-                {
-                    if (outletConnectionVisualStart != null)
-                    {
-                        outletConnectionVisualStart.Delete();
-                        outletConnectionVisualStart = null;
-                    }
-
-                    outletConnectionVisualStart =
-                        TxRobotAPIClass.CreateResourcePathCurve(
-                            0,
-                            "StartTree_Current_To_EscapePoint");
-                }
-                else
-                {
-                    if (outletConnectionVisualEnd != null)
-                    {
-                        outletConnectionVisualEnd.Delete();
-                        outletConnectionVisualEnd = null;
-                    }
-
-                    outletConnectionVisualEnd =
-                        TxRobotAPIClass.CreateResourcePathCurve(
-                            1,
-                            "EndTree_Current_To_EscapePoint");
-                }
-
-                TxComponent visualComponent = isStartTree
-                    ? outletConnectionVisualStart
-                    : outletConnectionVisualEnd;
-
-                if (visualComponent == null)
-                {
-                    return;
-                }
-
-                joint currentNode = treeNodes[index].loc;
-                joint escapeJoint = escapeResult.RandJoint;
-
-                TxColor startColor = new TxColor(255, 0, 0);
-                TxColor endColor = new TxColor(0, 0, 255);
-                TxColor lineColor = new TxColor(255, 255, 0);
-
-                TxRobotAPIClass.CreateSphereView(
-                    control,
-                    currentNode,
-                    robot,
-                    visualComponent,
-                    startColor);
-
-                TxRobotAPIClass.CreateSphereView(
-                    control,
-                    escapeJoint,
-                    robot,
-                    visualComponent,
-                    endColor);
-
-                TxRobotAPIClass.TxcreateCurvePath(
-                    control,
-                    visualComponent,
-                    currentNode,
-                    escapeJoint,
-                    isStartTree
-                        ? "Start_Current_To_EscapePoint_Line"
-                        : "End_Current_To_EscapePoint_Line",
-                    robot,
-                    lineColor);
-
-                TxApplication.RefreshDisplay();
-            }
-            catch (Exception ex)
-            {
-                logpathGenerateOK(
-                    " VisualizeCurrentNodeToEscapePoint failed: " + ex.Message);
-            }
         }
 
     }

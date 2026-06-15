@@ -60,6 +60,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>StringTable.resx</DependentUpon>
     </Compile>
+    <Compile Include="TxMLrrtConnectForecast.cs" />
     <Compile Include="TxRobotAPIClass.cs" />
     <Compile Include="TxRobotPathOptimizePtp.cs" />
     <Compile Include="TxRobotptpPathCal.cs" />
@@ -71,7 +72,6 @@
     <Compile Include="TxrrtRobotPathPlannerForm.Designer.cs">
       <DependentUpon>TxrrtRobotPathPlannerForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="TxStagnationRotationEscapePlanner.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="StringTable.resx">
