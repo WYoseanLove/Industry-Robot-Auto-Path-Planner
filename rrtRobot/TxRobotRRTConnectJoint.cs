@@ -1164,42 +1164,7 @@ namespace rrtRobot
                          GetRandomDouble(start_nodes[0].loc.j5 - M_PI / 2, start_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j6 - M_PI, start_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
-
-                    bool useSpecialSelection = (IterationCounts % 2 == 0);
-
-                    // ============================================================
-                    // 起点树停滞：用出口吸引点替代 rand_node.loc
-                    // 这个吸引点像随机点一样，用于决定哪个 start_nodes 节点被选中扩展
-                    // ============================================================
-                    if (separatedAdaptiveSystem.startIsStagnant && useSpecialSelection)
-                    {
-                        int otherTreeIndex = Nearest_Node(2, start_nodes[0]);
-                        if (otherTreeIndex < 0) otherTreeIndex = 0;
-                        OutletAttractorResult outletResult =
-                            outletLearner.PredictOutletAttractor(
-                                start_nodes,              // 当前正在扩展的树
-                                p_end,                    // 当前树的目标
-                                end_nodes[otherTreeIndex].loc,       // 对侧树参考点
-                                obs,                      // 障碍/碰撞点
-                                start_step_size,          // 当前步长
-                                true,                     // 当前是起点树
-                                outletJointLimits);       // 关节限位
-
-                        if (outletResult != null && outletResult.Success)
-                        {
-                            rand_node.loc = outletResult.RandLikeAttractor;
-
-                        }
-
-                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
-                        index = Nearest_Node(1, rand_node);
-
-                    }
-                    else
-                    {
-                        index = Nearest_Node(1, rand_node);
-                    }
-
+                    index = Nearest_Node(1, rand_node);
                     int index_fromEndNodes = Nearest_Node(2, rand_node);
 
                     if (index_fromEndNodes < 0)
@@ -1341,42 +1306,7 @@ namespace rrtRobot
                          GetRandomDouble(end_nodes[0].loc.j5 - M_PI / 2, end_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j6 - M_PI, end_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
-                    bool useSpecialSelection = (IterationCounts % 2 == 0);
-
-                    // ============================================================
-                    // 终点树停滞：用出口吸引点替代 rand_node.loc
-                    // 这个吸引点像随机点一样，用于决定哪个 end_nodes 节点被选中扩展
-                    // ============================================================
-                    if (separatedAdaptiveSystem.endIsStagnant && useSpecialSelection)
-                    {
-                        //joint otherTreeReference = start_nodes.Count > 0 ? start_nodes[0].loc : p_start;
-                        int otherTreeIndex = Nearest_Node(1, end_nodes[0]);
-                        if (otherTreeIndex < 0) otherTreeIndex = 0;
-                        OutletAttractorResult outletResult =
-                            outletLearner.PredictOutletAttractor(
-                                end_nodes,                // 当前正在扩展的树
-                                p_start,                  // 终点树反向扩展时目标是起点
-                                start_nodes[otherTreeIndex].loc,       // 对侧树参考点
-                                obs,                      // 障碍/碰撞点
-                                end_step_size,            // 当前步长
-                                false,                    // 当前不是起点树
-                                outletJointLimits);       // 关节限位
-
-                        if (outletResult != null && outletResult.Success)
-                        {
-                            rand_node.loc = outletResult.RandLikeAttractor;
-
-                        }
-
-                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
-                        index = Nearest_Node(2, rand_node);
-                  
-                    }
-                    else
-                    {
-                        index = Nearest_Node(state, rand_node);
-                    }
-
+                    index = Nearest_Node(2, rand_node);
                     int index_fromEndNodes = Nearest_Node(1, rand_node);
 
                     if (index_fromEndNodes < 0)
