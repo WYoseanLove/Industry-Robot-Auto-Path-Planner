@@ -440,8 +440,7 @@ namespace rrtRobot
         private List<Node3D_joint> end_nodes = new List<Node3D_joint>(10000);
         private int nodecount_end = 0;
         public static List<joint> obs;
-        private TxComponent openSideCandidateVisual;//开放侧的可视化；
-
+    
         private int IterationCounts = 0;//记录rrtconnect 的迭代次数；
 
         public static bool currentpathdone = false;
@@ -450,13 +449,7 @@ namespace rrtRobot
         public double j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit;
         // === 智能采样和分离式自适应系统相关成员变量 ===
         public static SeparatedAdaptiveSystem separatedAdaptiveSystem;
-        // === 机器学习/经验学习出口吸引点系统 ===
-        private EscapeOutletAttractorLearner outletLearner = new EscapeOutletAttractorLearner();
-        private JointLimitBox outletJointLimits;
-        // === 出口吸引点连接线可视化 ===
-        private TxComponent outletConnectionVisualStart;
-        private TxComponent outletConnectionVisualEnd;
-
+       
         public static void logpathGenerateOK(string str)
         {
             StreamWriter sw = new StreamWriter(TxrrtRobotPathPlannerForm.LogfilePath, true);
@@ -1010,17 +1003,6 @@ namespace rrtRobot
             // 初始化智能采样和分离式自适应系统
 
             separatedAdaptiveSystem = new SeparatedAdaptiveSystem();
-            // 初始化出口吸引点学习器
-            if (outletLearner == null)
-            {
-                outletLearner = new EscapeOutletAttractorLearner();
-            }
-
-            // 初始化关节限位
-            outletJointLimits = new JointLimitBox(
-                j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit,
-                j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit);
-
             connected = 0;
             state = 1;
             sub_state = 0;
@@ -1123,31 +1105,17 @@ namespace rrtRobot
                 }
                 sub_state = 0;
                 IterationCounts++;
-                if (IterationCounts >= 10000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
+                if (IterationCounts >= 13000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
                 {
                     AppendPathEndNodesToStartTree(control);
                 }
-                if ((IterationCounts / threshold) == 12)
+                if ((IterationCounts / threshold) == 15)
                 {
                     if (x != null)
                         x.Delete();
                     if (y != null)
                         y.Delete();
-                    if (openSideCandidateVisual != null)
-                    {
-                        openSideCandidateVisual.Delete();
-                        openSideCandidateVisual = null;
-                    }
-                    if (outletConnectionVisualStart != null)
-                    {
-                        outletConnectionVisualStart.Delete();
-                        outletConnectionVisualStart = null;
-                    }
-                    if (outletConnectionVisualEnd != null)
-                    {
-                        outletConnectionVisualEnd.Delete();
-                        outletConnectionVisualEnd = null;
-                    }
+                  
                     return; //如果迭代次数超过10000次则退出
                 }
                 if (state == 1)
@@ -1164,42 +1132,7 @@ namespace rrtRobot
                          GetRandomDouble(start_nodes[0].loc.j5 - M_PI / 2, start_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j6 - M_PI, start_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
-
-                    bool useSpecialSelection = (IterationCounts % 2 == 0);
-
-                    // ============================================================
-                    // 起点树停滞：用出口吸引点替代 rand_node.loc
-                    // 这个吸引点像随机点一样，用于决定哪个 start_nodes 节点被选中扩展
-                    // ============================================================
-                    if (separatedAdaptiveSystem.startIsStagnant && useSpecialSelection)
-                    {
-                        int otherTreeIndex = Nearest_Node(2, start_nodes[0]);
-                        if (otherTreeIndex < 0) otherTreeIndex = 0;
-                        OutletAttractorResult outletResult =
-                            outletLearner.PredictOutletAttractor(
-                                start_nodes,              // 当前正在扩展的树
-                                p_end,                    // 当前树的目标
-                                end_nodes[otherTreeIndex].loc,       // 对侧树参考点
-                                obs,                      // 障碍/碰撞点
-                                start_step_size,          // 当前步长
-                                true,                     // 当前是起点树
-                                outletJointLimits);       // 关节限位
-
-                        if (outletResult != null && outletResult.Success)
-                        {
-                            rand_node.loc = outletResult.RandLikeAttractor;
-
-                        }
-
-                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
-                        index = Nearest_Node(1, rand_node);
-
-                    }
-                    else
-                    {
-                        index = Nearest_Node(1, rand_node);
-                    }
-
+                    index = Nearest_Node(1, rand_node);
                     int index_fromEndNodes = Nearest_Node(2, rand_node);
 
                     if (index_fromEndNodes < 0)
@@ -1341,42 +1274,7 @@ namespace rrtRobot
                          GetRandomDouble(end_nodes[0].loc.j5 - M_PI / 2, end_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j6 - M_PI, end_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
-                    bool useSpecialSelection = (IterationCounts % 2 == 0);
-
-                    // ============================================================
-                    // 终点树停滞：用出口吸引点替代 rand_node.loc
-                    // 这个吸引点像随机点一样，用于决定哪个 end_nodes 节点被选中扩展
-                    // ============================================================
-                    if (separatedAdaptiveSystem.endIsStagnant && useSpecialSelection)
-                    {
-                        //joint otherTreeReference = start_nodes.Count > 0 ? start_nodes[0].loc : p_start;
-                        int otherTreeIndex = Nearest_Node(1, end_nodes[0]);
-                        if (otherTreeIndex < 0) otherTreeIndex = 0;
-                        OutletAttractorResult outletResult =
-                            outletLearner.PredictOutletAttractor(
-                                end_nodes,                // 当前正在扩展的树
-                                p_start,                  // 终点树反向扩展时目标是起点
-                                start_nodes[otherTreeIndex].loc,       // 对侧树参考点
-                                obs,                      // 障碍/碰撞点
-                                end_step_size,            // 当前步长
-                                false,                    // 当前不是起点树
-                                outletJointLimits);       // 关节限位
-
-                        if (outletResult != null && outletResult.Success)
-                        {
-                            rand_node.loc = outletResult.RandLikeAttractor;
-
-                        }
-
-                        // 关键：仍然用 Nearest_Node，让吸引点决定哪个成功节点扩展
-                        index = Nearest_Node(2, rand_node);
-                  
-                    }
-                    else
-                    {
-                        index = Nearest_Node(state, rand_node);
-                    }
-
+                    index = Nearest_Node(2, rand_node);
                     int index_fromEndNodes = Nearest_Node(1, rand_node);
 
                     if (index_fromEndNodes < 0)
@@ -1510,21 +1408,7 @@ namespace rrtRobot
                 x.Delete();
             if (y != null)
                 y.Delete();
-            if (openSideCandidateVisual != null)
-            {
-                openSideCandidateVisual.Delete();
-                openSideCandidateVisual = null;
-            }
-            if (outletConnectionVisualStart != null)
-            {
-                outletConnectionVisualStart.Delete();
-                outletConnectionVisualStart = null;
-            }
-            if (outletConnectionVisualEnd != null)
-            {
-                outletConnectionVisualEnd.Delete();
-                outletConnectionVisualEnd = null;
-            }
+          
         }
         // 新增的方法：局部路径规划
         public bool LocalPathPlanningWithAPF(Control control, ref joint current, joint p_start, joint p_goal, joint NearStartNodes, joint NearGoalNodes, bool fromstart2end, List<joint> obsList, double k_att, double k_rep, double influenceRadius, int maxIterations, double learningRate)

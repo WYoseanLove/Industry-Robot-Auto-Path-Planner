@@ -60,7 +60,6 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>StringTable.resx</DependentUpon>
     </Compile>
-    <Compile Include="TxMLrrtConnectForecast.cs" />
     <Compile Include="TxRobotAPIClass.cs" />
     <Compile Include="TxRobotPathOptimizePtp.cs" />
     <Compile Include="TxRobotptpPathCal.cs" />
