@@ -54,3 +54,12 @@ C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.cs
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.csproj.CoreCompileInputs.cache
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.dll
 C:\Users\29667\Desktop\淘宝交付\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.pdb
+E:\code\source\repos\MulrrtRobot\rrtRobot\bin\Release\rrtRobot.dll
+E:\code\source\repos\MulrrtRobot\rrtRobot\bin\Release\rrtRobot.pdb
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.csproj.AssemblyReference.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.StringTable.resources
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.TxrrtRobotPathPlannerForm.resources
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.csproj.GenerateResource.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.csproj.CoreCompileInputs.cache
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.dll
+E:\code\source\repos\MulrrtRobot\rrtRobot\obj\Release\rrtRobot.pdb

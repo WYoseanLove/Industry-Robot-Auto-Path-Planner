@@ -110,7 +110,6 @@ namespace rrtRobot
     }
 
     // === 分离式自适应步长系统 ===
-    // === 分离式自适应步长系统 ===
     public class SeparatedAdaptiveSystem
     {
         // 起始树相关参数
@@ -183,8 +182,8 @@ namespace rrtRobot
                 AdjustEndTreeStepSize(minStepSize, maxStepSize, endPoint, endNodes);
             }
 
-            if(startEnvironmentState== "Extremely Dense Obstacles"&&startNodes.Count>=80) startIsStagnant = true;
-            if (endEnvironmentState == "Extremely Dense Obstacles" && endNodes.Count >= 80) endIsStagnant = true;
+            if ((startEnvironmentState == "Extremely Dense Obstacles" || startEnvironmentState == "Dense Obstacles") && startNodes.Count >= 40) startIsStagnant = true;
+            if ((endEnvironmentState == "Extremely Dense Obstacles" || endEnvironmentState == "Dense Obstacles") && endNodes.Count >= 40) endIsStagnant = true;
 
             // 记录历史
             RecordAdaptiveHistory();
@@ -359,46 +358,9 @@ namespace rrtRobot
             endSuccessfulSamples = 0;
             endTotalSamples = 0;
             startIsStagnant = false;
-            endIsStagnant= false;
+            endIsStagnant = false;
         }
     }
-
-    /// <summary>
-    /// 边界节点详细信息类
-    /// </summary>
-    public class BoundaryNodeInfo
-    {
-        public int Index { get; set; }
-        public joint Position { get; set; }              // 6D关节空间位置
-        public point Position3D { get; set; }            // 3D笛卡尔空间位置
-        public double DistanceToCenter { get; set; }     // 到中心点的3D距离
-        public double[] Direction { get; set; }          // 方向向量（单位向量）
-        public int ClusterIndex { get; set; }            // 所属的聚类索引
-    }
-
-    /// <summary>
-    /// 节点角度聚类信息
-    /// </summary>
-    public class NodeAngleCluster
-    {
-        public int ClusterIndex { get; set; }            // 聚类索引
-        public double[] RepresentativeDirection { get; set; }  // 代表方向（单位向量）
-        public List<NodeInfo3D> Nodes { get; set; }      // 该聚类中的所有节点
-        public NodeInfo3D FarthestNode { get; set; }     // 该聚类中距离最远的节点（边界）
-    }
-
-    /// <summary>
-    /// 节点3D信息类
-    /// </summary>
-    public class NodeInfo3D
-    {
-        public int Index { get; set; }
-        public joint Position { get; set; }
-        public point Position3D { get; set; }
-        public double[] Direction { get; set; }          // 从中心指向该节点的单位向量
-        public double DistanceToCenter { get; set; }     // 3D欧氏距离
-    }
- 
 
     /* 
      * The TxRobotRRTConnectJoint class is used to calculate the transition point trajectory between solder joints. The algorithm is based on bidirectional RRT tree expansion using the start and end point robot's six axis values.
@@ -435,22 +397,22 @@ namespace rrtRobot
         private int pathcount_start = 0;
         private List<joint> path_points_end = new List<joint>(500);
         private int pathcount_end = 0;
-        public static  Random rd;
+        public static Random rd;
         private List<Node3D_joint> start_nodes = new List<Node3D_joint>(10000);
         private int nodecount_start = 0;
         private List<Node3D_joint> end_nodes = new List<Node3D_joint>(10000);
         private int nodecount_end = 0;
         public static List<joint> obs;
-
+    
         private int IterationCounts = 0;//记录rrtconnect 的迭代次数；
 
         public static bool currentpathdone = false;
 
-        public  double j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit;
-        public  double j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit;
+        public double j1Llimit, j2Llimit, j3Llimit, j4Llimit, j5Llimit, j6Llimit;
+        public double j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit;
         // === 智能采样和分离式自适应系统相关成员变量 ===
         public static SeparatedAdaptiveSystem separatedAdaptiveSystem;
-
+       
         public static void logpathGenerateOK(string str)
         {
             StreamWriter sw = new StreamWriter(TxrrtRobotPathPlannerForm.LogfilePath, true);
@@ -472,24 +434,6 @@ namespace rrtRobot
 
             sw.Close();
         }
-        public static void LoginterPoljoints(joint p)
-        {
-            StreamWriter sw = new StreamWriter(TxrrtRobotPathPlannerForm.LogfilePath, true);
-
-
-            sw.WriteLine(DateTime.Now.ToLocalTime().ToString() + " Escape Joint Direction selection is : " + (p.j1 * 180 / M_PI).ToString() + " " +
-                (p.j2 * 180 / M_PI).ToString() + " " +
-                (p.j3 * 180 / M_PI).ToString() + " " +
-                (p.j4 * 180 / M_PI).ToString() + " " +
-                (p.j5 * 180 / M_PI).ToString() + " " +
-                (p.j6 * 180 / M_PI).ToString() + " "
-
-           );
-
-
-            sw.Close();
-        }
-
         public double dist(joint p1, joint p2)  // To calculate the distance between two points
         {
 
@@ -497,211 +441,6 @@ namespace rrtRobot
                 + Math.Pow(p2.j4 - p1.j4, 2) + Math.Pow(p2.j5 - p1.j5, 2) + Math.Pow(p2.j6 - p1.j6, 2));
 
         }
-        /// <summary>
-        /// 在边界节点中选择距离最远的节点（基于角度聚类）
-        /// 策略：将方向相近(±10度)的节点归为一类，每类选最远的作为边界
-        /// </summary>
-        /// <param name="control">控制器（用于正运动学）</param>
-        /// <param name="fromstart2end">方向标志（1=起点树，其他=终点树）</param>
-        /// <param name="angleThreshold">角度聚类阈值（度），默认10度</param>
-        /// <param name="topN">从前N个最远的边界中随机选择，默认5</param>
-        /// <returns>边界节点索引</returns>
-        public int Nearest_BoundaryNode_RandomTop(
-            Control control,
-            joint step, int fromstart2end,
-            double angleThreshold = 10,
-            int topN = 10)
-        {
-            // 第一步：按角度聚类，找到各个方向的边界节点
-            List<BoundaryNodeInfo> boundaryNodes = IdentifyBoundaryNodes_ByAngleClustering(
-                control, fromstart2end, angleThreshold);
-
-            if (boundaryNodes.Count == 0) return -1;
-
-            // 第二步：按3D距离排序（从大到小）
-            boundaryNodes.Sort((a, b) => b.DistanceToCenter.CompareTo(a.DistanceToCenter));
-            // 第三步：从前topN个中随机选择一个
-            // int candidateCount = Math.Max(topN, boundaryNodes.Count);
-            int candidateCount = boundaryNodes.Count;
-            TxComponent y = TxRobotAPIClass.CreateResourcePathCurve(1, "selectNode");
-
-            for (int i = 0; i < candidateCount; i++)
-            {
-                TxRobotAPIClass.CreateSphereView(control, boundaryNodes[i].Position, robot, y, new TxColor(255, 0, 0));
-            }
-            TxApplication.RefreshDisplay();
-            //Random random = new Random();
-            //int selectedRank = random.Next(candidateCount);
-
-            int selectedRank = Nearest_Node(boundaryNodes, step, candidateCount);
-            int selectedIndex = boundaryNodes[selectedRank].Index;
-
-            if (y != null)
-                y.Delete();
-            return selectedIndex;
-        }
-
-        /// <summary>
-        /// 通过角度聚类识别边界节点
-        /// 原理：方向相近的节点归为一类，每类选择距离最远的作为边界
-        /// </summary>
-        private List<BoundaryNodeInfo> IdentifyBoundaryNodes_ByAngleClustering(
-            Control control,
-            int fromstart2end,
-            double angleThresholdDegrees)
-        {
-            // 获取节点列表
-            List<Node3D_joint> nodeList = fromstart2end == 1 ? start_nodes : end_nodes;
-
-            if (nodeList.Count <= 1)
-                return new List<BoundaryNodeInfo>();
-
-            // 获取中心点
-            joint centerJoint = nodeList[0].loc;
-            point centerPoint3D = ConvertJointToPoint(control, centerJoint);
-            double centerX = centerPoint3D.x;
-            double centerY = centerPoint3D.y;
-            double centerZ = centerPoint3D.z;
-
-            // 计算所有节点的3D信息（方向和距离）
-            List<NodeInfo3D> nodeInfos = new List<NodeInfo3D>();
-
-            for (int i = 0; i < nodeList.Count; i++)
-            {
-                joint nodeJoint = nodeList[i].loc;
-                point nodePoint3D = ConvertJointToPoint(control, nodeJoint);
-
-                // 计算从中心到节点的向量
-                double dx = nodePoint3D.x - centerX;
-                double dy = nodePoint3D.y - centerY;
-                double dz = nodePoint3D.z - centerZ;
-                double distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-
-                // 跳过中心点
-                if (distance < 1e-6)
-                    continue;
-
-                // 归一化方向向量
-                double[] direction = new double[3]
-                {
-            dx / distance,
-            dy / distance,
-            dz / distance
-                };
-
-                nodeInfos.Add(new NodeInfo3D
-                {
-                    Index = i,
-                    Position = nodeJoint,
-                    Position3D = nodePoint3D,
-                    Direction = direction,
-                    DistanceToCenter = distance
-                });
-            }
-
-            if (nodeInfos.Count == 0)
-                return new List<BoundaryNodeInfo>();
-
-            // 角度聚类
-            double angleThresholdRadians = angleThresholdDegrees * Math.PI / 180.0;
-            double cosThreshold = Math.Cos(angleThresholdRadians);  // cos(10°) ≈ 0.985
-
-            List<NodeAngleCluster> clusters = new List<NodeAngleCluster>();
-
-            foreach (var nodeInfo in nodeInfos)
-            {
-                bool addedToCluster = false;
-
-                // 尝试将节点加入现有聚类
-                foreach (var cluster in clusters)
-                {
-                    // 计算节点方向与聚类代表方向的夹角
-                    double dotProduct =
-                        nodeInfo.Direction[0] * cluster.RepresentativeDirection[0] +
-                        nodeInfo.Direction[1] * cluster.RepresentativeDirection[1] +
-                        nodeInfo.Direction[2] * cluster.RepresentativeDirection[2];
-
-                    // 如果夹角在阈值范围内（cos值越大，角度越小）
-                    if (dotProduct >= cosThreshold)
-                    {
-                        // 加入该聚类
-                        cluster.Nodes.Add(nodeInfo);
-
-                        // 更新最远节点
-                        if (nodeInfo.DistanceToCenter > cluster.FarthestNode.DistanceToCenter)
-                        {
-                            cluster.FarthestNode = nodeInfo;
-                        }
-
-                        addedToCluster = true;
-                        break;
-                    }
-                }
-
-                // 如果没有加入任何现有聚类，创建新聚类
-                if (!addedToCluster)
-                {
-                    var newCluster = new NodeAngleCluster
-                    {
-                        ClusterIndex = clusters.Count,
-                        RepresentativeDirection = nodeInfo.Direction,  // 使用第一个节点的方向作为代表
-                        Nodes = new List<NodeInfo3D> { nodeInfo },
-                        FarthestNode = nodeInfo
-                    };
-                    clusters.Add(newCluster);
-                }
-            }
-
-            // 从每个聚类中提取边界节点（最远的节点）
-            List<BoundaryNodeInfo> boundaryNodes = new List<BoundaryNodeInfo>();
-
-            foreach (var cluster in clusters)
-            {
-                var farthest = cluster.FarthestNode;
-
-                boundaryNodes.Add(new BoundaryNodeInfo
-                {
-                    Index = farthest.Index,
-                    Position = farthest.Position,
-                    Position3D = farthest.Position3D,
-                    DistanceToCenter = farthest.DistanceToCenter,
-                    Direction = farthest.Direction,
-                    ClusterIndex = cluster.ClusterIndex
-                });
-            }
-
-            return boundaryNodes;
-        }
-
-        private point ConvertJointToPoint(Control control, joint j)
-        {
-            // 需要根据你的实际代码实现正运动学
-            // 示例：
-
-            using (var robotPosture = new TxPoseData())
-            {
-
-                var arr = new ArrayList(j.ToArray());
-                robotPosture.JointValues = arr;
-
-                var sols = new ArrayList { robotPosture };
-                TxRobotAPIClass.TxRobotPostureGenerate(
-                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, j.Sever_Gun);
-
-                point p = new point(
-                      robot.TCPF.AbsoluteLocation.Translation.X,
-                      robot.TCPF.AbsoluteLocation.Translation.Y,
-                      robot.TCPF.AbsoluteLocation.Translation.Z,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
-                     robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
-                    j.Sever_Gun);
-                return p;
-
-            }
-
-        }
-
         public int Nearest_Node(int fromstart2end, Node3D_joint rand)
         {
             double min = 999.0;
@@ -739,24 +478,6 @@ namespace rrtRobot
             }
 
 
-
-
-            return index;
-        }
-
-        public int Nearest_Node(List<BoundaryNodeInfo> boundaryNodes, joint rand, int candidateCount)
-        {
-            double min = 999.0;
-            int index = -1;
-
-            for (int i = 0; i < candidateCount; i++)
-            {
-                if (dist(rand, boundaryNodes[i].Position) < min)
-                {
-                    min = dist(rand, boundaryNodes[i].Position);
-                    index = i;
-                }
-            }
 
 
             return index;
@@ -824,19 +545,18 @@ namespace rrtRobot
             using (var robotPosture = new TxPoseData())
             {
                 step.ToArray();
+                var arr = new ArrayList(step.ToArray());
+                robotPosture.JointValues = arr;
+                var sols = new ArrayList { robotPosture };
+                //修改了这里，先生成posture,将机器人的姿态更新，再检测是否超值，
+                //适合于FANUC机器人2/3轴联动的
+                TxRobotAPIClass.TxRobotPostureGenerate(
+                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, step.Sever_Gun);
                 for (int i = 0; i < 6; i++)
                 {
                     if ((step.ToArray()[i] < robot.Joints[i].LowerSoftLimit) || (step.ToArray()[i] > robot.Joints[i].UpperSoftLimit)) return false;
 
                 }
-
-                var arr = new ArrayList(step.ToArray());
-                robotPosture.JointValues = arr;
-
-                var sols = new ArrayList { robotPosture };
-                TxRobotAPIClass.TxRobotPostureGenerate(
-                    control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, step.Sever_Gun);
-
                 if (TxRobotAPIClass.Collision_Check(
                     control, cd, queryParams, root, collisionSrc, collisionTar, 5.0))
                     return true;
@@ -964,7 +684,7 @@ namespace rrtRobot
             double t1 = TxRobotptpPathCal.calculatePTPtime(control, deltas, robot);
             double t2 = TxRobotptpPathCal.calculateServoPTPtime(dg, robServerGun);
             double T = Math.Max(t1, t2);
-            int N = (int)(T / 0.05);
+            int N = (int)(T / 0.01);
 
 
             for (int i = 1; i <= N; i++)
@@ -985,11 +705,14 @@ namespace rrtRobot
                         (double)pose.JointValues[5],
                         gun
                     );
+                    joint before = p;
+
 
                     if (!collisioncheckforSingleJoint(control, ref p))
                         return false;
 
-
+                    if (Math.Abs(p.Sever_Gun - before.Sever_Gun) > 1e-4)
+                        return false;
                 }
             }
 
@@ -1030,10 +753,12 @@ namespace rrtRobot
                 int checkCount = Math.Min(20, nodecount_start);
                 int startIdx = Math.Max(0, nodecount_start - checkCount);
 
+
                 for (int i = startIdx; i < nodecount_start; i++)
                 {
                     if (dist(start_nodes[i].loc, step.loc) < circle_radius_1 &&
-                        isValid(control, step.loc, start_nodes[i].loc, true))
+                        isValid(control, step.loc, start_nodes[i].loc, true)
+                       )
                     {
                         new_cost = dist(start_nodes[i].loc, step.loc) + start_nodes[i].cost;
                         if (new_cost < min_cost)
@@ -1080,6 +805,34 @@ namespace rrtRobot
                     step.cost = min_cost;
                 }
             }
+        }
+        private void AppendPathEndNodesToStartTree(Control control)
+        {
+            if (TxrrtRobotPathPlannerForm.Pathend_nodes.Count <= 1)
+            {
+                TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
+                return;
+            }
+
+            TxrrtRobotPathPlannerForm.Pathend_nodes.Reverse();
+
+            for (int i = 1; i < TxrrtRobotPathPlannerForm.Pathend_nodes.Count; i++)
+            {
+                Node3D_joint newJointLoc = new Node3D_joint();
+                Node3D_joint parentNode = (i == 1) ? start_nodes[0] : start_nodes.Last();
+
+                newJointLoc.loc = TxrrtRobotPathPlannerForm.Pathend_nodes[i];
+                newJointLoc.parent = parentNode;
+                newJointLoc.step_size = dist(newJointLoc.loc, parentNode.loc);
+                newJointLoc.cost = newJointLoc.step_size + parentNode.cost;
+
+                minimal_cost(control, newJointLoc, IterationCounts);
+
+                start_nodes.Add(newJointLoc);
+                nodecount_start++;
+            }
+
+            TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
         }
         public void path_Points(int index_1, int index_2) // final path points will be keep at path_points_start and path_points_end List
         {
@@ -1207,7 +960,7 @@ namespace rrtRobot
             return vector.Select(x => x / norm).ToArray();
         }
 
-        
+
         public void rrt_connectJointPtp(Control control, joint p_start, joint p_end)
         {
             // 初始化智能采样和分离式自适应系统
@@ -1218,6 +971,7 @@ namespace rrtRobot
             sub_state = 0;
             nodecount_start = 0;
             nodecount_end = 0;
+            IterationCounts = 0;
 
             Node3D_joint start_node = new Node3D_joint();
             Node3D_joint end_node = new Node3D_joint();
@@ -1242,27 +996,6 @@ namespace rrtRobot
             start_nodes.Add(start_node);
 
             nodecount_start++;
-            if (TxrrtRobotPathPlannerForm.Pathend_nodes.Count != 0)
-            {
-                TxrrtRobotPathPlannerForm.Pathend_nodes.Reverse();
-                for (int i = 0; i < TxrrtRobotPathPlannerForm.Pathend_nodes.Count; i++)
-                {
-                    if (dist(TxrrtRobotPathPlannerForm.Pathend_nodes[i], start_node.loc) <= 1e-6) continue;
-
-                    Node3D_joint newJointLoc = new Node3D_joint();
-
-                    newJointLoc.loc = TxrrtRobotPathPlannerForm.Pathend_nodes[i];
-                    newJointLoc.parent = start_nodes.Last();
-                    newJointLoc.step_size = dist(newJointLoc.loc, start_nodes.Last().loc);
-                    newJointLoc.cost = newJointLoc.step_size + start_nodes.Last().cost;
-                    start_nodes.Add(newJointLoc);
-                    nodecount_start++;
-                }
-
-
-                TxrrtRobotPathPlannerForm.Pathend_nodes.Clear();
-            }
-
             end_nodes.Add(end_node);
             nodecount_end++;
             currentpathdone = false;
@@ -1335,12 +1068,17 @@ namespace rrtRobot
                 }
                 sub_state = 0;
                 IterationCounts++;
-                if ((IterationCounts / threshold) == 12)
+                if (IterationCounts >= 13000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
+                {
+                    AppendPathEndNodesToStartTree(control);
+                }
+                if ((IterationCounts / threshold) == 15)
                 {
                     if (x != null)
                         x.Delete();
                     if (y != null)
                         y.Delete();
+                  
                     return; //如果迭代次数超过10000次则退出
                 }
                 if (state == 1)
@@ -1348,8 +1086,8 @@ namespace rrtRobot
 
                     double rand_node_gun_open = 0;
 
-                    rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
-
+                    //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    rand_node_gun_open = ToolJointOpening;
                     rand_node.loc = new joint(GetRandomDouble(start_nodes[0].loc.j1 - M_PI / 2, start_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j2 - M_PI / 2, start_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j3 - M_PI / 2, start_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1357,13 +1095,18 @@ namespace rrtRobot
                          GetRandomDouble(start_nodes[0].loc.j5 - M_PI / 2, start_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j6 - M_PI, start_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
-
-                    if (separatedAdaptiveSystem.startIsStagnant && IterationCounts%2==0)
-                    {
-                        index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
-                    }
-                    else index = Nearest_Node(1, rand_node);
+                    index = Nearest_Node(1, rand_node);
                     int index_fromEndNodes = Nearest_Node(2, rand_node);
+
+                    if (index_fromEndNodes < 0)
+                    {
+                        index_fromEndNodes = 0;
+                    }
+
+                    if (index < 0)
+                    {
+                        continue;
+                    }
 
                     if (index_fromEndNodes < 0) index_fromEndNodes = 0;
 
@@ -1417,7 +1160,7 @@ namespace rrtRobot
                         minimal_cost(control, step_node, IterationCounts);
                         step_node.step_size = start_step_size;
                         TxRobotAPIClass.TxcreateCurvePath(control, x, step_node.parent.loc, step_node.loc, start_nodes.Count.ToString(), robot, new TxColor(220, 220, 220));
-                     
+
                         start_nodes.Add(step_node);
                         nodecount_start++;
                     }
@@ -1466,7 +1209,7 @@ namespace rrtRobot
                             sub_step_node.step_size = end_step_size;
                             separatedAdaptiveSystem.RecordEndTreeSample(true);
                             TxRobotAPIClass.TxcreateCurvePath(control, y, sub_step_node.parent.loc, sub_step_node.loc, end_nodes.Count.ToString(), robot, new TxColor(255, 0, 0));
-                           
+
                             end_nodes.Add(sub_step_node);
                             nodecount_end++;
                             end_substate++;
@@ -1485,7 +1228,8 @@ namespace rrtRobot
 
                     double rand_node_gun_open = 0;
 
-                    rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
+                    rand_node_gun_open = ToolJointOpening;
                     rand_node.loc = new joint(GetRandomDouble(end_nodes[0].loc.j1 - M_PI / 2, end_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j2 - M_PI / 2, end_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j3 - M_PI / 2, end_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1493,19 +1237,19 @@ namespace rrtRobot
                          GetRandomDouble(end_nodes[0].loc.j5 - M_PI / 2, end_nodes[0].loc.j5 + M_PI / 2, j5Llimit, j5Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j6 - M_PI, end_nodes[0].loc.j6 + M_PI, j6Llimit, j6Ulimit),
                          rand_node_gun_open);
+                    index = Nearest_Node(2, rand_node);
+                    int index_fromEndNodes = Nearest_Node(1, rand_node);
 
-
-
-                    if (separatedAdaptiveSystem.endIsStagnant && IterationCounts % 2 == 0)
+                    if (index_fromEndNodes < 0)
                     {
-                       index = Nearest_BoundaryNode_RandomTop(control, rand_node.loc, state, 10);
+                        index_fromEndNodes = 0;
                     }
 
-                    else index = Nearest_Node(state, rand_node);
+                    if (index < 0)
+                    {
+                        continue;
+                    }
 
-                    int index_fromEndNodes = Nearest_Node(1, rand_node);
-                    if (index_fromEndNodes < 0) index_fromEndNodes = 0;
-                    if (index < 0) continue;
 
                     if (dist(end_nodes[index].loc, rand_node.loc) < end_step_size) continue;
                     else
@@ -1515,7 +1259,6 @@ namespace rrtRobot
 
 
                         (step_node.loc) = step_func(end_nodes[index].loc, rand_node.loc, end_step_size);
-
 
                         //double[] apf_direction = ArtificialPotentialField(control, step_node.loc, end_nodes[index].loc, start_nodes[index_fromEndNodes].loc, p_start, end_step_size);
                         double[] apf_direction = ApfCalculateMethod(control, step_node.loc, start_nodes[index_fromEndNodes].loc, p_start, end_step_size, obs, k_att, k_rep, end_step_size * 2);
@@ -1549,7 +1292,7 @@ namespace rrtRobot
                         step_node.step_size = end_step_size;
                         end_nodes.Add(step_node);
                         TxRobotAPIClass.TxcreateCurvePath(control, y, step_node.parent.loc, step_node.loc, end_nodes.Count.ToString(), robot, new TxColor(250, 0, 0));
-                       
+
                         nodecount_end++;
 
                     }
@@ -1596,7 +1339,7 @@ namespace rrtRobot
                             separatedAdaptiveSystem.RecordStartTreeSample(true);
                             start_nodes.Add(sub_step_node);
                             TxRobotAPIClass.TxcreateCurvePath(control, x, sub_step_node.parent.loc, sub_step_node.loc, start_nodes.Count.ToString(), robot, new TxColor(220, 220, 220));
-                         
+
                             sub_step_node.step_size = start_step_size;
                             nodecount_start++;
                             if (start_substate > 5)
@@ -1622,17 +1365,18 @@ namespace rrtRobot
             TxrrtRobotPathPlannerForm.Pathend_nodes.AddRange(path_points_end);
             end_nodes.Clear();
             logpathGenerateOK(" Path Generate OK! " + IterationCounts.ToString());
-          
+
             currentpathdone = true;// 记录当前的轨迹已经计算结束，无论是正常结束还是手动结束
             if (x != null)
                 x.Delete();
             if (y != null)
                 y.Delete();
+          
         }
-        // 新增的方法：局部路径规划
         // 新增的方法：局部路径规划
         public bool LocalPathPlanningWithAPF(Control control, ref joint current, joint p_start, joint p_goal, joint NearStartNodes, joint NearGoalNodes, bool fromstart2end, List<joint> obsList, double k_att, double k_rep, double influenceRadius, int maxIterations, double learningRate)
         {
+
             for (int iteration = 0; iteration < maxIterations; iteration++)
             {
                 if (fromstart2end) //表示从start向end去扩展
@@ -1685,7 +1429,6 @@ namespace rrtRobot
         }
 
         // 带rcs的插补算法
-
         public static TxGenericRoboticOperation opCollison;
         public static bool isValidforstepCorssRCS(Control control, ref joint step, joint near, bool stepToNear)
         {
@@ -1834,63 +1577,6 @@ namespace rrtRobot
             //mSimulationPlayer.Rewind();
             mSimulationPlayer.JumpSimulationToTime(0.00, false, TxSimulationPlayerSource.TaskSimulationPlayer);
             return collisionResult;
-
-        }
-
-        private static bool UseSimulationPlayer2(TxGenericRoboticOperation opCollison, joint end)
-        {
-            mSimulationPlayer = new TxSimulationPlayer();
-            collisionResult = true;
-            ITxOperation tITxOperation = opCollison as ITxOperation;
-            mSimulationPlayer.TimeInterval = 0.01;
-            TxApplication.Options.Simulation.SimulationSpeed = 100;
-            mSimulationPlayer.SetOperation(tITxOperation);
-            mSimulationPlayer.PlaySilently();
-            double ptpTime = mSimulationPlayer.CurrentTime;
-
-            int T = (int)(ptpTime / 0.01);
-
-            for (int i = 0; i <= T; i++)
-            {
-                mSimulationPlayer.JumpSimulationToTime(i * 0.01, false, TxSimulationPlayerSource.TaskSimulationPlayer);
-                using (var pose = robot.CurrentPose)
-                {
-
-                    double gun_open = (robServerGun.DrivingJoints.Last() as TxJoint).CurrentValue;
-
-
-                    joint p = new joint(
-                           (double)pose.JointValues[0], (double)pose.JointValues[1], (double)pose.JointValues[2],
-                           (double)pose.JointValues[3], (double)pose.JointValues[4], (double)pose.JointValues[5], gun_open);
-                    before = p;
-                    if (!collisioncheckforSingleJoint(TxrrtRobotPathPlannerForm.mainTxControl, ref p))
-                    {
-                        collisionResult = false;
-                        break;
-                        //mSimulationPlayer.Stop();
-                    }
-                    else
-                    {
-                        // 如果碰撞检测微调了 p，就把它当做新的 step 然后跳出重跑
-                        if (!JointEquals(p, before))
-                        {
-                            before.Sever_Gun = p.Sever_Gun;
-                            bump_rcs = true;
-                            break;
-
-                        }
-                    }
-
-
-                }
-
-
-
-            }
-            mSimulationPlayer.JumpSimulationToTime(0.00, false, TxSimulationPlayerSource.TaskSimulationPlayer);
-
-            return collisionResult;
-
 
         }
 
@@ -2062,11 +1748,5 @@ namespace rrtRobot
 
         }
 
-
-
-
     }
 }
-
-
-
