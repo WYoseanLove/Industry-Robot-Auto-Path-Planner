@@ -1,9 +1,4 @@
 .vs/
-bin/
-obj/
-Debug/
-Release/
-
 *.user
 *.suo
 *.pdb
