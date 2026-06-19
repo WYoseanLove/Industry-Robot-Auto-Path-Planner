@@ -362,43 +362,6 @@ namespace rrtRobot
         }
     }
 
-    /// <summary>
-    /// 边界节点详细信息类
-    /// </summary>
-    public class BoundaryNodeInfo
-    {
-        public int Index { get; set; }
-        public joint Position { get; set; }              // 6D关节空间位置
-        public point Position3D { get; set; }            // 3D笛卡尔空间位置
-        public double DistanceToCenter { get; set; }     // 到中心点的3D距离
-        public double[] Direction { get; set; }          // 方向向量（单位向量）
-        public int ClusterIndex { get; set; }            // 所属的聚类索引
-    }
-
-    /// <summary>
-    /// 节点角度聚类信息
-    /// </summary>
-    public class NodeAngleCluster
-    {
-        public int ClusterIndex { get; set; }            // 聚类索引
-        public double[] RepresentativeDirection { get; set; }  // 代表方向（单位向量）
-        public List<NodeInfo3D> Nodes { get; set; }      // 该聚类中的所有节点
-        public NodeInfo3D FarthestNode { get; set; }     // 该聚类中距离最远的节点（边界）
-    }
-
-    /// <summary>
-    /// 节点3D信息类
-    /// </summary>
-    public class NodeInfo3D
-    {
-        public int Index { get; set; }
-        public joint Position { get; set; }
-        public point Position3D { get; set; }
-        public double[] Direction { get; set; }          // 从中心指向该节点的单位向量
-        public double DistanceToCenter { get; set; }     // 3D欧氏距离
-    }
-
-
     /* 
      * The TxRobotRRTConnectJoint class is used to calculate the transition point trajectory between solder joints. The algorithm is based on bidirectional RRT tree expansion using the start and end point robot's six axis values.
      * The reference GitHub for the RRT* Connect algorithm is https://github.com/WYoseanLove/RRT-_Connect_3D.
