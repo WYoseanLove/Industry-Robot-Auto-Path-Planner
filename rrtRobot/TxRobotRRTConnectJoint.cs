@@ -977,8 +977,6 @@ namespace rrtRobot
             Node3D_joint end_node = new Node3D_joint();
             Node3D_joint rand_node = new Node3D_joint();
             int index;
-
-
             Node3D_joint step_node;
             Node3D_joint sub_step_node;
 
