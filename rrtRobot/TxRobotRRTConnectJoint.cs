@@ -1012,7 +1012,6 @@ namespace rrtRobot
 
             start_node.loc.Sever_Gun = p_start.Sever_Gun;
 
-
             while (!collisioncheckforSingleJoint(control, ref p_end))
             {
 
