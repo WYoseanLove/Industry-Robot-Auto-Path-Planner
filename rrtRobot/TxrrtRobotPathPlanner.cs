@@ -31,6 +31,7 @@ namespace rrtRobot
             rob_Form.InitializeComponent();
             rob_Form.Show();
             rob_Form.Form_Setup();
+            
         }
 
         public override string Bitmap
