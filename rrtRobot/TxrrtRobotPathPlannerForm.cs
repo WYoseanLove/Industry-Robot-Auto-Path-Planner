@@ -80,6 +80,7 @@ namespace rrtRobot
         public static List<joint> Pathend_nodes = new List<joint>();
 
         public static bool isRCSLoaded = false;
+        private Bitmap pathConnectIcon;
 
 
         // 用于log文件txt的生成，在系统Documents/rrtRobot文件夹下面
@@ -137,24 +138,151 @@ namespace rrtRobot
         }
         public void Form_Setup()
         {
-            //对对话框控件的字体进行修改，在WPF中修改的字体无法在Tecnomatix中显示；
             m_pathGenerate.Enabled = false;
-            
-            m_pathGenerate.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            button1.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            label3.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            label4.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            label6.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-
-            m_spotDirec.Font = new System.Drawing.Font("Microsoft Sans Serif", 12, System.Drawing.FontStyle.Bold | System.Drawing.FontStyle.Underline, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            Collision_Src.Font = new System.Drawing.Font("Microsoft Sans Serif", 12);
-           // this.FormBorderStyle = FormBorderStyle.Fixed3D;
+            ApplyPlannerStyle();
+            ConfigurePlannerSections();
             this.StartPosition = FormStartPosition.CenterParent;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.ClientSize = new Size(1040, 1300);
+            this.MaximizeBox = false;       
+            this.Resize += (sender, e) => LayoutPlannerControls();
+            this.DpiChanged += (sender, e) => LayoutPlannerControls();
+            LayoutPlannerControls();
+
             m_collisionListPick.Enabled = false;
             button1.Enabled = false;
             collisionSrc = new TxObjectList();
+        }
+
+        private void ApplyPlannerStyle()
+        {
+            Font uiFont = new Font("Segoe UI", 11.5F, FontStyle.Regular, GraphicsUnit.Point);
+            Font sectionFont = new Font("Segoe UI", 12.5F, FontStyle.Bold, GraphicsUnit.Point);
+
+            Font = uiFont;
+            BackColor = Color.FromArgb(243, 246, 250);
+            ForeColor = Color.FromArgb(35, 48, 67);
+
+            groupBox2.Font = sectionFont;
+            Group_Collision.Font = sectionFont;
+            groupBox1.Font = sectionFont;
+            groupBox2.BackColor = Color.White;
+            Group_Collision.BackColor = Color.White;
+            groupBox1.BackColor = Color.White;
+
+            label2.Font = sectionFont;
+            label3.Font = uiFont;
+            label5.Font = sectionFont;
+            label4.Font = uiFont;
+            label6.Font = uiFont;
+            Collision_Src.Font = uiFont;
+            checkBoxDefaultPtpInterpolation.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
+            checkBoxDefaultPtpInterpolation.AutoSize = false;
+
+            textLogfile.Font = new Font("Consolas", 10F, FontStyle.Regular, GraphicsUnit.Point);
+            textLogfile.BackColor = Color.FromArgb(250, 252, 255);
+            textLogfile.ForeColor = Color.FromArgb(35, 48, 67);
+            textLogfile.BorderStyle = BorderStyle.FixedSingle;
+            m_GroupTargetOpPick.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point);
+            m_collisionListPick.Font = new Font("Segoe UI", 11.5F, FontStyle.Regular, GraphicsUnit.Point);
+
+            button1.FlatStyle = FlatStyle.Flat;
+            button1.FlatAppearance.BorderSize = 0;
+            button1.BackColor = Color.FromArgb(37, 99, 235);
+            button1.ForeColor = Color.White;
+            button1.Font = new Font("Segoe UI", 10F, FontStyle.Bold, GraphicsUnit.Point);
+            button1.Cursor = Cursors.Hand;
+
+            m_pathGenerate.FlatStyle = FlatStyle.Flat;
+            m_pathGenerate.FlatAppearance.BorderSize = 0;
+            m_pathGenerate.BackColor = Color.FromArgb(15, 118, 110);
+            m_pathGenerate.ForeColor = Color.White;
+            m_pathGenerate.Font = new Font("Segoe UI", 10F, FontStyle.Bold, GraphicsUnit.Point);
+            m_pathGenerate.Cursor = Cursors.Hand;
+
+            label4.ForeColor = Color.FromArgb(100, 116, 139);
+            label6.ForeColor = Color.FromArgb(100, 116, 139);
+        }
+
+        private void ConfigurePlannerSections()
+        {
+            groupBox2.Text = "01  TARGET OPERATION";
+            Group_Collision.Text = "02  COLLISION CHECK";
+            groupBox1.Text = "03  PLANNING STATUS";
+            label5.Visible = false;
+            label2.Visible = false;
+            label6.Text = "Select one or more welding operation groups.";
+            label4.Text = "Click the empty area to finish selection.";
+        }
+
+        private int ScaleUi(int logicalPixels)
+        {
+            return (int)Math.Round(logicalPixels * DeviceDpi / 96.0);
+        }
+
+        private void LayoutPlannerControls()
+        {
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0)
+                return;
+
+            int margin = ScaleUi(16);
+            int sectionWidth = ClientSize.Width - margin * 2;
+            int contentMargin = ScaleUi(18);
+            int sectionGap = ScaleUi(14);
+            int targetTop = ScaleUi(18);
+            int targetHeight = ScaleUi(142);
+            int collisionTop = targetTop + targetHeight + sectionGap;
+            int collisionHeight = ScaleUi(146);
+            int logTop = collisionTop + collisionHeight + sectionGap;
+            int contentWidth = sectionWidth - contentMargin * 2;
+            int buttonMargin = ScaleUi(20);
+            int buttonGap = ScaleUi(16);
+            int buttonTop = ClientSize.Height - ScaleUi(62);
+            int buttonTotalWidth = button1.Width + buttonGap + m_pathGenerate.Width;
+            button1.SetBounds(ClientSize.Width - buttonTotalWidth - buttonMargin, buttonTop, button1.Width, button1.Height);
+            m_pathGenerate.SetBounds(button1.Right + buttonGap, buttonTop, m_pathGenerate.Width, m_pathGenerate.Height);
+            int checkboxTop = ClientSize.Height - ScaleUi(55);
+            int checkboxWidth = Math.Max(ScaleUi(1), Math.Min(ScaleUi(400), button1.Left - margin - ScaleUi(20)));
+            checkBoxDefaultPtpInterpolation.SetBounds(margin, checkboxTop, checkboxWidth, ScaleUi(34));
+
+            groupBox2.SetBounds(margin, targetTop, sectionWidth, targetHeight);
+            label6.SetBounds(contentMargin, ScaleUi(34), contentWidth, ScaleUi(30));
+            m_GroupTargetOpPick.SetBounds(contentMargin, ScaleUi(78), contentWidth, ScaleUi(52));
+
+            Group_Collision.SetBounds(margin, collisionTop, sectionWidth, collisionHeight);
+            label4.SetBounds(contentMargin, ScaleUi(34), contentWidth, ScaleUi(30));
+            int collisionLabelWidth = Math.Min(ScaleUi(190), contentWidth / 3);
+            int collisionPickerLeft = contentMargin + collisionLabelWidth + ScaleUi(10);
+            Collision_Src.SetBounds(contentMargin, ScaleUi(91), collisionLabelWidth, ScaleUi(34));
+            m_collisionListPick.SetBounds(collisionPickerLeft, ScaleUi(84), Math.Max(ScaleUi(160), sectionWidth - collisionPickerLeft - contentMargin), ScaleUi(48));
+
+            int footerHeight = ScaleUi(118);
+            int footerTop = Math.Min(buttonTop, checkboxTop);
+            int availableStatusHeight = Math.Max(ScaleUi(1), Math.Min(ClientSize.Height - logTop - footerHeight, footerTop - logTop - ScaleUi(16)));
+            int currentStatusHeight = availableStatusHeight * 2 / 3;
+            int statusHeight = Math.Min(currentStatusHeight * 3, availableStatusHeight);
+            groupBox1.SetBounds(margin, logTop, sectionWidth, statusHeight);
+            int statusPadding = Math.Min(ScaleUi(18), Math.Max(ScaleUi(6), groupBox1.ClientSize.Height / 12));
+            int progressHeight = Math.Min(ScaleUi(28), Math.Max(ScaleUi(12), groupBox1.ClientSize.Height / 7));
+            int labelHeight = Math.Min(ScaleUi(30), Math.Max(ScaleUi(18), groupBox1.ClientSize.Height / 5));
+            label3.SetBounds(contentMargin, statusPadding, ScaleUi(340), labelHeight);
+            int progressTop = label3.Bottom + Math.Min(ScaleUi(10), statusPadding);
+            PathprogressBar.SetBounds(contentMargin, progressTop, contentWidth, progressHeight);
+            int logTopInStatus = PathprogressBar.Bottom + Math.Min(ScaleUi(12), statusPadding);
+            int availableLogHeight = Math.Max(ScaleUi(1), groupBox1.ClientSize.Height - logTopInStatus - statusPadding);
+            int logHeight = availableLogHeight;
+            textLogfile.SetBounds(contentMargin, logTopInStatus, contentWidth, logHeight);
+        }
+
+        private void checkBoxDefaultPtpInterpolation_CheckedChanged(object sender, EventArgs e)
+        {
+            isRCSLoaded = checkBoxDefaultPtpInterpolation.Checked;
+            if (checkBoxDefaultPtpInterpolation.Checked)
+            {
+                textLogfile.AppendText(DateTime.Now.ToLocalTime().ToString() + " Auto Path planning is calculated based on Process Simulate’s default PTP interpolation algorithm, which may result in a slight reduction in calculation speed !" + Environment.NewLine);
+                textLogfile.SelectionStart = textLogfile.TextLength;
+                textLogfile.ScrollToCaret();
+            }
         }
 
         private void txTargetGroupOpEditBoxCtrl_Picked(object sender, TxObjEditBoxCtrl_PickedEventArgs args)
@@ -888,7 +1016,7 @@ namespace rrtRobot
             for (int i = 0; i < TargetCalWeldOp.Count; i++)
             {
 
-                isRCSLoaded = false;
+                isRCSLoaded = checkBoxDefaultPtpInterpolation.Checked;
                 robot = (TargetCalWeldOp[i].Robot) as TxRobot;
                 robServerGun = (TargetCalWeldOp[i].Gun) as TxServoGun;
 
@@ -1330,6 +1458,11 @@ namespace rrtRobot
 
         private void TxrrtRobotPathPlannerForm_FormClosed(object sender, FormClosedEventArgs e)
         {
+            if (pathConnectIcon != null)
+            {
+                pathConnectIcon.Dispose();
+                pathConnectIcon = null;
+            }
             TargetCalWeldOp.Clear();
             TargetCalLocNames.Clear();
             if (node3D_startptpList != null) node3D_startptpList.Clear();

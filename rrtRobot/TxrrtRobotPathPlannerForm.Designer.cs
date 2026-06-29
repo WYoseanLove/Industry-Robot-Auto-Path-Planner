@@ -47,10 +47,11 @@ namespace rrtRobot
             this.textLogfile = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
-            this.m_GroupTargetOpPick = new Tecnomatix.Engineering.Ui.TxObjEditBoxCtrl();
             this.label6 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
             this.m_spotDirec = new System.Windows.Forms.Label();
+            this.checkBoxDefaultPtpInterpolation = new System.Windows.Forms.CheckBox();
+            this.m_GroupTargetOpPick = new Tecnomatix.Engineering.Ui.TxObjEditBoxCtrl();
             this.Group_Collision.SuspendLayout();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -144,21 +145,6 @@ namespace rrtRobot
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.TabStop = false;
             // 
-            // m_GroupTargetOpPick
-            // 
-            this.m_GroupTargetOpPick.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.m_GroupTargetOpPick.KeepFaceEmphasizedWhenControlIsNotFocused = true;
-            this.m_GroupTargetOpPick.ListenToPick = true;
-            resources.ApplyResources(this.m_GroupTargetOpPick, "m_GroupTargetOpPick");
-            this.m_GroupTargetOpPick.Name = "m_GroupTargetOpPick";
-            this.m_GroupTargetOpPick.Object = null;
-            this.m_GroupTargetOpPick.PickAndClear = false;
-            this.m_GroupTargetOpPick.PickLevel = Tecnomatix.Engineering.Ui.TxPickLevel.Component;
-            this.m_GroupTargetOpPick.PickOnly = false;
-            this.m_GroupTargetOpPick.ReadOnly = false;
-            this.m_GroupTargetOpPick.ValidatorType = Tecnomatix.Engineering.Ui.TxValidatorType.Operation;
-            this.m_GroupTargetOpPick.Picked += new Tecnomatix.Engineering.Ui.TxObjEditBoxCtrl_PickedEventHandler(this.txTargetGroupOpEditBoxCtrl_Picked);
-            // 
             // label6
             // 
             resources.ApplyResources(this.label6, "label6");
@@ -174,10 +160,33 @@ namespace rrtRobot
             resources.ApplyResources(this.m_spotDirec, "m_spotDirec");
             this.m_spotDirec.Name = "m_spotDirec";
             // 
+            // checkBoxDefaultPtpInterpolation
+            // 
+            resources.ApplyResources(this.checkBoxDefaultPtpInterpolation, "checkBoxDefaultPtpInterpolation");
+            this.checkBoxDefaultPtpInterpolation.Name = "checkBoxDefaultPtpInterpolation";
+            this.checkBoxDefaultPtpInterpolation.UseVisualStyleBackColor = true;
+            this.checkBoxDefaultPtpInterpolation.CheckedChanged += new System.EventHandler(this.checkBoxDefaultPtpInterpolation_CheckedChanged);
+            // 
+            // m_GroupTargetOpPick
+            // 
+            this.m_GroupTargetOpPick.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.m_GroupTargetOpPick.KeepFaceEmphasizedWhenControlIsNotFocused = true;
+            this.m_GroupTargetOpPick.ListenToPick = true;
+            resources.ApplyResources(this.m_GroupTargetOpPick, "m_GroupTargetOpPick");
+            this.m_GroupTargetOpPick.Name = "m_GroupTargetOpPick";
+            this.m_GroupTargetOpPick.Object = null;
+            this.m_GroupTargetOpPick.PickAndClear = false;
+            this.m_GroupTargetOpPick.PickLevel = Tecnomatix.Engineering.Ui.TxPickLevel.Component;
+            this.m_GroupTargetOpPick.PickOnly = false;
+            this.m_GroupTargetOpPick.ReadOnly = false;
+            this.m_GroupTargetOpPick.ValidatorType = Tecnomatix.Engineering.Ui.TxValidatorType.Operation;
+            this.m_GroupTargetOpPick.Picked += new Tecnomatix.Engineering.Ui.TxObjEditBoxCtrl_PickedEventHandler(this.txTargetGroupOpEditBoxCtrl_Picked);
+            // 
             // TxrrtRobotPathPlannerForm
             // 
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+            this.Controls.Add(this.checkBoxDefaultPtpInterpolation);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.m_pathGenerate);
@@ -218,7 +227,8 @@ namespace rrtRobot
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Label label6;
-        private TxObjEditBoxCtrl m_GroupTargetOpPick;
         private System.Windows.Forms.TextBox textLogfile;
+        private System.Windows.Forms.CheckBox checkBoxDefaultPtpInterpolation;
+        private TxObjEditBoxCtrl m_GroupTargetOpPick;
     }
 }

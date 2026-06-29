@@ -1,15 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Tecnomatix.Engineering;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.Rebar;
 namespace rrtRobot
 {
     public struct joint
@@ -388,6 +383,8 @@ namespace rrtRobot
         private const double Min_step_szie = Math.PI / 180;
         public static double start_step_size = M_PI / 18;
         public static double end_step_size = M_PI / 18;
+        public static double Original_start_step_size = M_PI / 18;
+        public static double Original_end_step_size = M_PI / 18;
         private double k_att = 1.0;
         private double k_rep = 5.0;
 
@@ -403,7 +400,7 @@ namespace rrtRobot
         private List<Node3D_joint> end_nodes = new List<Node3D_joint>(10000);
         private int nodecount_end = 0;
         public static List<joint> obs;
-    
+
         private int IterationCounts = 0;//记录rrtconnect 的迭代次数；
 
         public static bool currentpathdone = false;
@@ -412,7 +409,7 @@ namespace rrtRobot
         public double j1Ulimit, j2Ulimit, j3Ulimit, j4Ulimit, j5Ulimit, j6Ulimit;
         // === 智能采样和分离式自适应系统相关成员变量 ===
         public static SeparatedAdaptiveSystem separatedAdaptiveSystem;
-       
+
         public static void logpathGenerateOK(string str)
         {
             StreamWriter sw = new StreamWriter(TxrrtRobotPathPlannerForm.LogfilePath, true);
@@ -561,10 +558,10 @@ namespace rrtRobot
                     control, cd, queryParams, root, collisionSrc, collisionTar, 5.0))
                     return true;
 
-                const int N = 30;
+                const int N = 10;
                 for (int i = N - 1; i >= 1; i--)
                 {
-                    double g = step.Sever_Gun * i / (double)N;
+                    double g = (int)(step.Sever_Gun * i / (double)N);
                     TxRobotAPIClass.TxRobotPostureGenerate(
                         control, TxrrtRobotPathPlannerForm.robot, TxrrtRobotPathPlannerForm.robServerGun, sols, g);
                     if (TxRobotAPIClass.Collision_Check(
@@ -596,7 +593,7 @@ namespace rrtRobot
             bool stepToNear
         )
         {
-            const int MAX_ITERS = 10;
+            const int MAX_ITERS = 5;
             int iter = 0;
             while (iter++ < MAX_ITERS)
             {
@@ -963,6 +960,15 @@ namespace rrtRobot
 
         public void rrt_connectJointPtp(Control control, joint p_start, joint p_end)
         {
+            bool rcsCollisionOperationCreated = false;
+            if (isRCSLoaded)
+            {
+                CreateRcsCollisionOperation();
+                rcsCollisionOperationCreated = true;
+            }
+
+            try
+            {
             // 初始化智能采样和分离式自适应系统
 
             separatedAdaptiveSystem = new SeparatedAdaptiveSystem();
@@ -977,8 +983,6 @@ namespace rrtRobot
             Node3D_joint end_node = new Node3D_joint();
             Node3D_joint rand_node = new Node3D_joint();
             int index;
-
-
             Node3D_joint step_node;
             Node3D_joint sub_step_node;
 
@@ -999,9 +1003,6 @@ namespace rrtRobot
             end_nodes.Add(end_node);
             nodecount_end++;
             currentpathdone = false;
-
-            int gun_open_splict = 30;
-
             obs = new List<joint>();
 
             while (!collisioncheckforSingleJoint(control, ref p_start))
@@ -1011,6 +1012,7 @@ namespace rrtRobot
             }
 
             start_node.loc.Sever_Gun = p_start.Sever_Gun;
+
 
             while (!collisioncheckforSingleJoint(control, ref p_end))
             {
@@ -1030,6 +1032,9 @@ namespace rrtRobot
 
             start_step_size = Math.Min(Math.PI / 18, start_step_size);
             end_step_size = Math.Min(Math.PI / 18, end_step_size);
+
+            Original_end_step_size = end_step_size;
+            Original_start_step_size = start_step_size;
 
             separatedAdaptiveSystem.InitializeStepSizes(start_step_size, end_step_size);
             separatedAdaptiveSystem.startRecentStepSizes.Add(start_step_size);
@@ -1051,6 +1056,11 @@ namespace rrtRobot
                     {
                         start_step_size = separatedAdaptiveSystem.startRecentStepSizes.Average();
                         end_step_size = separatedAdaptiveSystem.endRecentStepSizes.Average();
+                        if (IterationCounts % 5000 == 0)
+                        {
+                            start_step_size = Original_start_step_size;
+                            end_step_size = Original_end_step_size;
+                        }
 
                         separatedAdaptiveSystem.InitializeStepSizes(start_step_size, end_step_size);
                         separatedAdaptiveSystem.ResetStatistics();
@@ -1067,17 +1077,17 @@ namespace rrtRobot
                 }
                 sub_state = 0;
                 IterationCounts++;
-                if (IterationCounts >= 13000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
+                if (IterationCounts >= 15000 && TxrrtRobotPathPlannerForm.Pathend_nodes.Count > 1)
                 {
                     AppendPathEndNodesToStartTree(control);
                 }
-                if ((IterationCounts / threshold) == 15)
+                if ((IterationCounts / threshold) == 20)
                 {
                     if (x != null)
                         x.Delete();
                     if (y != null)
                         y.Delete();
-                  
+
                     return; //如果迭代次数超过10000次则退出
                 }
                 if (state == 1)
@@ -1085,8 +1095,8 @@ namespace rrtRobot
 
                     double rand_node_gun_open = 0;
 
-                    //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
-                    rand_node_gun_open = ToolJointOpening;
+                    //rand_node_gun_open = (int)(ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict));
+                    rand_node_gun_open = (int)(rd.Next(5, 11) * (start_nodes[0].loc.Sever_Gun / 10));
                     rand_node.loc = new joint(GetRandomDouble(start_nodes[0].loc.j1 - M_PI / 2, start_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j2 - M_PI / 2, start_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(start_nodes[0].loc.j3 - M_PI / 2, start_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1141,6 +1151,7 @@ namespace rrtRobot
 
                     }
                     bool isvalidcorss = isValid(control, step_node.loc, start_nodes[index].loc, true);
+
                     if (isvalidcorss == false)
                     {
                         // 如果扩展失败，尝试使用局部路径规划
@@ -1228,7 +1239,7 @@ namespace rrtRobot
                     double rand_node_gun_open = 0;
 
                     //rand_node_gun_open = ToolJointOpening - rd.Next(0, gun_open_splict) * (ToolJointOpening / gun_open_splict);
-                    rand_node_gun_open = ToolJointOpening;
+                    rand_node_gun_open = (int)(rd.Next(5, 11) * (end_nodes[0].loc.Sever_Gun / 10));
                     rand_node.loc = new joint(GetRandomDouble(end_nodes[0].loc.j1 - M_PI / 2, end_nodes[0].loc.j1 + M_PI / 2, j1Llimit, j1Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j2 - M_PI / 2, end_nodes[0].loc.j2 + M_PI / 2, j2Llimit, j2Ulimit),
                          GetRandomDouble(end_nodes[0].loc.j3 - M_PI / 2, end_nodes[0].loc.j3 + M_PI / 2, j3Llimit, j3Ulimit),
@@ -1274,6 +1285,7 @@ namespace rrtRobot
 
                     }
                     bool isvalidcorss = isValid(control, step_node.loc, end_nodes[index].loc, false);
+
                     if (isvalidcorss == false)
                     {
                         if (LocalPathPlanningWithAPF(control, ref step_node.loc, p_start, p_end, start_nodes[index_fromEndNodes].loc, end_nodes[index].loc, false, obs, k_att, k_rep, end_step_size, 5, end_step_size / 2))
@@ -1370,7 +1382,13 @@ namespace rrtRobot
                 x.Delete();
             if (y != null)
                 y.Delete();
-          
+
+            }
+            finally
+            {
+                if (rcsCollisionOperationCreated)
+                    DeleteRcsCollisionOperation();
+            }
         }
         // 新增的方法：局部路径规划
         public bool LocalPathPlanningWithAPF(Control control, ref joint current, joint p_start, joint p_goal, joint NearStartNodes, joint NearGoalNodes, bool fromstart2end, List<joint> obsList, double k_att, double k_rep, double influenceRadius, int maxIterations, double learningRate)
@@ -1429,8 +1447,35 @@ namespace rrtRobot
 
         // 带rcs的插补算法
         public static TxGenericRoboticOperation opCollison;
+        private static void CreateRcsCollisionOperation()
+        {
+            TxGenericRoboticOperationCreationData txCollisioncheckPath = new TxGenericRoboticOperationCreationData();
+            txCollisioncheckPath.Robot = robot;
+            txCollisioncheckPath.Tool = TxrrtRobotPathPlannerForm.robServerGun as ITxLocatableObject;
+
+            opCollison = TxApplication.ActiveDocument.OperationRoot.CreateGenericRoboticOperation(txCollisioncheckPath);
+
+            mSimulationPlayer = new TxSimulationPlayer();
+            mSimulationPlayer.TimeInterval = 0.01;
+            TxApplication.Options.Simulation.SimulationSpeed = 100;
+            mSimulationPlayer.SetOperation(opCollison as ITxOperation);
+        }
+
+        private static void DeleteRcsCollisionOperation()
+        {
+            if (opCollison != null)
+            {
+                opCollison.Delete();
+                opCollison = null;
+            }
+
+            mSimulationPlayer = null;
+        }
+
         public static bool isValidforstepCorssRCS(Control control, ref joint step, joint near, bool stepToNear)
         {
+            if (opCollison == null)
+                CreateRcsCollisionOperation();
 
             const int MAX_ITERS = 10;
             int iter = 0;
@@ -1466,54 +1511,47 @@ namespace rrtRobot
                 endPose.JointValues = robJointValue;
 
 
+                TxRoboticViaLocationOperation startTransitionPoint = null;
+                TxRoboticViaLocationOperation endTransitionPoint = null;
+                bool isvalidforcross;
+                try
+                {
+                    robot.CurrentPose = startPose;
+                    point p = new point(robot.TCPF.AbsoluteLocation.Translation.X,
+                            robot.TCPF.AbsoluteLocation.Translation.Y,
+                            robot.TCPF.AbsoluteLocation.Translation.Z,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
+                            start.Sever_Gun);
 
-                TxGenericRoboticOperationCreationData txCollisioncheckPath = new TxGenericRoboticOperationCreationData();
+                    startTransitionPoint = addrobotPathViaLoc("start", p, opCollison, robot, TxrrtRobotPathPlannerForm.robServerGun);
+                    TxRobotConfigurationData txRobotConfigurationData = robot.GetPoseConfiguration(startPose);
+                    startTransitionPoint.RobotConfigurationData = txRobotConfigurationData;
 
-                txCollisioncheckPath.Robot = robot;
-                if (TxrrtRobotPathPlannerForm.robServerGun != null)
-                    txCollisioncheckPath.Tool = TxrrtRobotPathPlannerForm.robServerGun as ITxLocatableObject;
-                else
-                    txCollisioncheckPath.Tool = TxrrtRobotPathPlannerForm.robServerGun as ITxLocatableObject;
+                    robot.CurrentPose = endPose;
+                    p = new point(robot.TCPF.AbsoluteLocation.Translation.X,
+                            robot.TCPF.AbsoluteLocation.Translation.Y,
+                            robot.TCPF.AbsoluteLocation.Translation.Z,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
+                            robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
+                            end.Sever_Gun);
 
-                opCollison = TxApplication.ActiveDocument.OperationRoot.CreateGenericRoboticOperation(txCollisioncheckPath);
-                robot.CurrentPose = startPose;
-                point p = new point(robot.TCPF.AbsoluteLocation.Translation.X,
-                        robot.TCPF.AbsoluteLocation.Translation.Y,
-                        robot.TCPF.AbsoluteLocation.Translation.Z,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
-                        start.Sever_Gun);
+                    endTransitionPoint = addrobotPathViaLoc("end", p, opCollison, robot, TxrrtRobotPathPlannerForm.robServerGun);
+                    txRobotConfigurationData = robot.GetPoseConfiguration(endPose);
+                    endTransitionPoint.RobotConfigurationData = txRobotConfigurationData;
+                    robot.CurrentPose = startPose;
 
-
-
-                TxRoboticViaLocationOperation RobFramepostLocation = addrobotPathViaLoc("start", p, opCollison, robot, TxrrtRobotPathPlannerForm.robServerGun);
-
-                TxRobotConfigurationData txRobotConfigurationData = robot.GetPoseConfiguration(startPose);
-                RobFramepostLocation.RobotConfigurationData = txRobotConfigurationData;
-
-
-                robot.CurrentPose = endPose;
-                p = new point(robot.TCPF.AbsoluteLocation.Translation.X,
-                        robot.TCPF.AbsoluteLocation.Translation.Y,
-                        robot.TCPF.AbsoluteLocation.Translation.Z,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.X,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Y,
-                        robot.TCPF.AbsoluteLocation.RotationRPY_XYZ.Z,
-                        end.Sever_Gun);
-
-
-                RobFramepostLocation = addrobotPathViaLoc("end", p, opCollison, robot, TxrrtRobotPathPlannerForm.robServerGun);
-
-                txRobotConfigurationData = robot.GetPoseConfiguration(endPose);
-                RobFramepostLocation.RobotConfigurationData = txRobotConfigurationData;
-                //TxApplication.ActiveDocument.CurrentOperation = opCollison;
-                robot.CurrentPose = startPose;
-
-                bool isvalidforcross = UseSimulationPlayer(opCollison);
-
-
-                opCollison.Delete();
+                    isvalidforcross = UseSimulationPlayer();
+                }
+                finally
+                {
+                    if (endTransitionPoint != null)
+                        endTransitionPoint.Delete();
+                    if (startTransitionPoint != null)
+                        startTransitionPoint.Delete();
+                }
 
                 if (!isvalidforcross) return false;
                 else
@@ -1556,19 +1594,11 @@ namespace rrtRobot
             return RobFramepostLocation;
         }
         public static TxSimulationPlayer mSimulationPlayer;
-        private static bool UseSimulationPlayer(TxGenericRoboticOperation opCollison)
+        private static bool UseSimulationPlayer()
         {
-
-            mSimulationPlayer = new TxSimulationPlayer();
             collisionResult = true;
-            //Here I use the current operation that was set active
-
-            ITxOperation tITxOperation = opCollison as ITxOperation;
-            mSimulationPlayer.TimeInterval = 0.01;
-            TxApplication.Options.Simulation.SimulationSpeed = 100;
 
             mSimulationPlayer.TimeIntervalReached += player_TimeIntervalReached;
-            mSimulationPlayer.SetOperation(tITxOperation);
 
             mSimulationPlayer.PlayWithoutRefresh();
 

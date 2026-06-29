@@ -12,18 +12,17 @@ namespace rrtRobot
     public class TxRobotptpPathCal
     {
         /* The `TxRobotptpPathCal` class calculates the interpolation algorithm for a PTP (Point-to-Point) trajectory of an industrial robot.
-         * First, it obtains the angular change of the six joint values between two PTP trajectory points of the robot. This is achieved by the function `calculateJointsChange(joint start, joint end, TxRobot robot)`.
-         * From the angular changes of the six joint values, the axis with the largest angular change is determined. The largest angular change value will determine the motion time between the PTP points. The maximum speed and maximum acceleration of each axis of the industrial robot are directly obtained through the TECNOMATIX API.
-         * The maximum axis speed is `robot.Joints[i].MaxSpeed`, and the maximum axis acceleration is `robot.Joints[i].MaxAcceleration`.
-         * Based on the maximum angular change of the axis, the maximum speed, and the maximum acceleration, the motion time is calculated using the function `calculatePTPtime(Control control, List<double> jointschange, TxRobot robot)`.
-         * The speed profile of the axis values is a trapezoidal diagram. First, it is confirmed whether the actual maximum speed `Maxspeedactual` reached during axis acceleration is equal to the theoretical maximum speed:
-         * Maxspeedactual = Min(sqrt(acc*α), MaxSpeedTarget)`.  (Note: α here is likely intended to be alpha, representing angular displacement)
-         * If `Maxspeedactual == sqrt(acc*α)`:
-         * The time is: `2*sqrt(α/acc)
-         * If `Maxspeedactual == MaxSpeedTarget`:
-         * The time is: `MaxSpeedTarget/acc + α/MaxSpeedTarget`
-         * `MaxSpeedTarget`, `acc`, and `α` are all angular values and can be expressed in degrees or radians.
-         * After obtaining the motion time of the joint axis with the largest angular change, interpolation is performed based on this time. The time can be divided into several segments, and the axis values of the other joint axes at these time points are calculated, thereby determining the robot's pose.
+         * It first obtains the angular changes of the six joints between two PTP trajectory points through `calculateJointsChange(joint start, joint end, TxRobot robot)`.
+         * The maximum speed and maximum acceleration for each axis are read from `robot.Joints[i].MaxSpeed` and `robot.Joints[i].MaxAcceleration`.
+         *
+         * `calculatePTPtime(Control control, List<double> jointschange, TxRobot robot)` calculates the minimum motion time for every axis and uses
+         * the longest one as the final PTP time. The axis with the longest minimum time is the motion bottleneck.
+         *
+         * Each axis uses a trapezoidal or triangular velocity profile. The actual peak speed is
+         * `Maxspeedactual = Min(sqrt(acc * α), MaxSpeedTarget)`.
+         * If the axis cannot reach its target maximum speed, its time is `2 * sqrt(α / acc)`; otherwise its time is
+         * `MaxSpeedTarget / acc + α / MaxSpeedTarget`. `MaxSpeedTarget`, `acc`, and `α` must use the same angular unit.
+         * The resulting PTP time is used to interpolate all joint values and calculate the robot pose at each interpolation instant.
          * The relationship between time *t*, angular change *α*, `Maxspeedactual`, and *acc* is:
          * `Maxspeedactual^2 - t * acc * Maxspeedactual + acc * α = 0`
          * If time *t* is known, solving for `Maxspeedactual` requires solving a quadratic equation. This will yield two solutions, which need to be compared and filtered against 0 and `MaxSpeedTarget`.
@@ -225,23 +224,37 @@ namespace rrtRobot
                     robot.Joints[3].MaxAcceleration, robot.Joints[4].MaxAcceleration, robot.Joints[5].MaxAcceleration
                 };
 
-                (double value, int index) result = FindLargestAbsoluteWithIndex(jointschange);
-
-                double Maxspeedactual = Math.Min(Math.Sqrt(acc[result.index] * Math.Abs(result.value)), MaxSpeedTarget[result.index]);
-
-                double T = 0;
-
-                if (Maxspeedactual != MaxSpeedTarget[result.index])
+                double ptpTime = 0;
+                for (int i = 0; i < MaxSpeedTarget.Length; i++)
                 {
-                    T = 2 * Math.Sqrt(Math.Abs(result.value) / acc[result.index]);
-                }
-                else
-                {
-                    T = MaxSpeedTarget[result.index] / acc[result.index] + Math.Abs(result.value) / MaxSpeedTarget[result.index];
+                    double axisTime = calculateAxisMinimumTime(jointschange[i], acc[i], MaxSpeedTarget[i], out bool isTrapezoid);
+                    if (axisTime > ptpTime)
+                    {
+                        ptpTime = axisTime;
+                    }
                 }
 
-                return T;
+                return ptpTime;
             }
+        }
+
+        private static double calculateAxisMinimumTime(double jointChange, double acc, double maxSpeed, out bool isTrapezoid)
+        {
+            double displacement = Math.Abs(jointChange);
+            isTrapezoid = false;
+
+            if (displacement <= 0 || acc <= 0 || maxSpeed <= 0)
+            {
+                return 0;
+            }
+
+            if (displacement >= maxSpeed * maxSpeed / acc)
+            {
+                isTrapezoid = true;
+                return maxSpeed / acc + displacement / maxSpeed;
+            }
+
+            return 2 * Math.Sqrt(displacement / acc);
         }
 
         public static double calculateServoPTPtime(double jointschange, TxServoGun Gun)
@@ -297,7 +310,7 @@ namespace rrtRobot
                 double[] JointMaxspeedactual = new double[6];
                 for (int i = 0; i < 6; i++)
                 {
-                    JointMaxspeedactual[i] = (ptpTime * acc[i] - Math.Sqrt(ptpTime * ptpTime * acc[i] * acc[i] - 4 * acc[i] * Math.Abs(jointschange[i]))) / 2;
+                    JointMaxspeedactual[i] = (ptpTime * acc[i] - Math.Sqrt(Math.Abs(ptpTime * ptpTime * acc[i] * acc[i] - 4 * acc[i] * Math.Abs(jointschange[i])))) / 2;
                 }
 
                 return JointMaxspeedactual;
@@ -403,7 +416,14 @@ namespace rrtRobot
                 }
 
                 ArrayList JointValue = new ArrayList();
-                JointValue.Add(joint_t * Math.Sign(JointchangeData) + Joint_start);
+                if (JointchangeData == 0)
+                {
+                    JointValue.Add(Joint_start);
+                }
+                else
+                {
+                    JointValue.Add(joint_t * Math.Sign(JointchangeData) + Joint_start);
+                }
 
                 JointPoseData.JointValues = JointValue;
 

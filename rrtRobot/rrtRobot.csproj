@@ -62,6 +62,7 @@
     </Compile>
     <Compile Include="TxRobotAPIClass.cs" />
     <Compile Include="TxRobotPathOptimizePtp.cs" />
+    <Compile Include="TxRobotptpInterpolationCal.cs" />
     <Compile Include="TxRobotptpPathCal.cs" />
     <Compile Include="TxRobotRRTConnectJoint.cs" />
     <Compile Include="TxrrtRobotPathPlanner.cs" />
